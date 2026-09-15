@@ -49,7 +49,10 @@ Runs the API on 4317 and Vite on 5173 with hot reload. Open http://localhost:517
 | Command | What it does |
 | --- | --- |
 | `npm run typecheck` | Type-check without emitting |
+| `npm run backup` | Snapshot the database to `data/backups/` |
 | `PORT=4318 npm start` | Run on a different port |
+| `JOURNAL_DATA_DIR=... npm start` | Keep all your data somewhere else |
+| `JOURNAL_BACKUP_DIR=... npm start` | Send only the backups somewhere else |
 
 ---
 
@@ -217,27 +220,207 @@ Commissions push each of these slightly higher.
 
 ---
 
-## Your data
+## Where your data actually lives
 
-Everything lives in `data/`:
+There is no cloud here, local or otherwise. Here is the whole picture:
+
+1. `npm start` launches a program on your computer. That is all "a server" means:
+   a program that answers requests. It does not have to be in a data centre.
+2. That program listens on port 4317 of your own machine.
+3. Your browser talks to it at `localhost`, which means *this computer*. The
+   request goes out of the browser and straight back into your own machine. It
+   never touches your router, your ISP, or the internet.
+4. The program reads and writes one file: `data/journal.db`.
+
+That file is an ordinary file on your hard drive, no different from a photo or a
+Word document. You can see it in Finder or File Explorer, copy it to a USB stick,
+or email it to yourself.
+
+The closest familiar comparison is Excel. Excel is a program on your computer and
+your spreadsheet is a file on your disk. This is the same, except you look at it
+through a browser tab instead of Excel's window. The browser is just the display.
 
 ```
 data/
-  journal.db      SQLite database: trades, rules, lists, journal entries
-  uploads/        chart screenshots, as ordinary image files
+  journal.db      every trade, rule, checklist result and journal entry
+  uploads/        chart screenshots, as ordinary .png files
+  backups/        automatic snapshots (see below)
 ```
 
-Both are gitignored, so your trading record never ends up in version control.
+All of it is gitignored, so your trading record never gets pushed to GitHub.
 
-**Chart screenshots** attach by paste (screenshot in TradingView, then Ctrl/Cmd+V
-anywhere on the trade form), drag and drop, or a file picker.
+### What happens when you log a trade
 
-**Backup** from Settings → Data downloads a JSON snapshot of every table, and restore
-reads it back. Chart images are files rather than database rows, so copy
-`data/uploads/` too when moving machines. Copying the whole `data/` folder is the
-simplest complete backup.
+Concretely, from pasting a screenshot to bytes on your disk:
 
----
+1. **You paste the chart.** The browser sends the image to the program running on
+   your computer, which writes it into `data/uploads/` with a generated name:
+
+   ```
+   data/uploads/1789451556257-44fc98fdbb18.png
+   ```
+
+   It is a normal PNG. You can open it in Preview or Photos.
+
+2. **You fill in the fields and hit save.** Everything you typed becomes one row
+   in `data/journal.db`:
+
+   ```
+   trade_no     21
+   symbol       GC
+   direction    short
+   trade_date   2026-09-15
+   setup        LSRM
+   net_pnl      700
+   risk_amount  350
+   thesis       Swept the NY pm high then displaced lower. Bearish 15m MSS...
+   image        /uploads/1789451556257-44fc98fdbb18.png
+   ```
+
+   Your checklist answers, notes, lesson and mistake tags go in alongside it.
+
+3. **That is the whole story.** Two things on your hard drive now hold that
+   trade: the database file and the image file. The database stores the image's
+   *path*, not the image itself, which is why copying the whole `data/` folder is
+   the complete backup and copying `journal.db` alone leaves your charts behind.
+
+### Does it survive?
+
+**Yes** through all of these: closing the terminal, quitting the browser,
+restarting your computer, updating the app with `git pull`, running it for years.
+The file sits on disk until something deletes it.
+
+**No** if the hard drive dies, the laptop is lost or stolen, or you delete the
+project folder. That is the real risk, and it is the same risk as any other file
+on your computer.
+
+Also worth knowing: cloning this repo somewhere else gives you an **empty**
+journal, because `data/` is deliberately not in version control. Moving machines
+means copying the `data/` folder across yourself.
+
+### Backups
+
+The journal snapshots itself **automatically once a day** into `data/backups/`,
+keeping the 30 most recent. You can also take one on demand:
+
+```bash
+npm run backup
+```
+
+or press **Snapshot now** in Settings → Data. To recover, copy a snapshot over
+`data/journal.db` while the server is stopped, and start it again.
+
+These snapshots use SQLite's `VACUUM INTO` rather than a plain file copy, and the
+difference is not academic. The journal runs in WAL mode, which means recent
+writes live in `journal.db-wal` until SQLite folds them in. Copying `journal.db`
+on its own can hand you a database that opens with **no tables at all**. Use the
+snapshots, or copy the entire `data/` folder, never `journal.db` by itself.
+
+Settings → Data also has a JSON export covering trades, rules and lists. That one
+is human-readable and portable, but it does not include your chart images.
+
+### Protecting against a dead drive
+
+Two ways, and the second is the safer default.
+
+**Option A: backups only to the cloud (recommended)**
+
+Keep the live database on local disk and send only the snapshots to a synced
+folder:
+
+```bash
+# Google Drive
+JOURNAL_BACKUP_DIR="$HOME/Google Drive/My Drive/TradingJournalBackups" npm start
+
+# Dropbox
+JOURNAL_BACKUP_DIR="$HOME/Dropbox/TradingJournalBackups" npm start
+```
+
+Snapshots are write-once files, so a sync service handles them perfectly. The
+live database stays on a real disk where file locking works. You get
+off-machine protection with none of the risk below.
+
+**Option B: everything in the cloud folder**
+
+```bash
+JOURNAL_DATA_DIR="$HOME/Dropbox/TradingJournal" npm start
+```
+
+The database, chart screenshots and snapshots all move there, which also lets a
+second computer pick up the same journal. Two warnings:
+
+- **Google Drive needs a setting change for this.** Drive for Desktop defaults
+  to *streaming*, where files live in the cloud and are fetched on demand
+  through a virtual drive. A live SQLite database on a virtual filesystem can
+  corrupt, because the file locking it depends on is not reliably supported.
+  If you want Option B on Google Drive, switch Drive to **Mirror files**
+  (Drive preferences → Google Drive → My Drive syncing options → Mirror files),
+  which keeps a real copy on your disk. Dropbox and iCloud Drive mirror by
+  default, so they are fine as-is. If you would rather not think about any of
+  this, use Option A.
+- **Never run the journal on two machines against the same synced folder at
+  once.** Sync services do not understand database locking and you will get a
+  conflicted copy. One machine at a time.
+
+### How does that relate to the hosting?
+
+It does not, and this is worth being clear about because the two get conflated.
+
+Putting your data in Google Drive does **not** mean Google is hosting the app.
+Drive's software keeps a folder on your disk in sync with their servers. As far
+as the journal is concerned that folder is just a path, no different from
+`Documents`. The server still runs on your computer, your browser still talks to
+`localhost`, and none of your page loads go anywhere near Google.
+
+Two separate questions, which you can answer independently:
+
+| Question | Answer here |
+| --- | --- |
+| Who runs the program? | Your computer, via `npm start` |
+| Where do the resulting files sit? | Wherever you point it, including a synced folder |
+
+Changing the second does not change the first.
+
+### Do you have to use Node.js?
+
+**Yes, always, regardless of the web address.** Something has to run the program
+that answers the browser, and for this app that something is Node.js. This holds
+whether the address is `localhost:4317`, `192.168.1.20:4317` from your phone, or
+a public domain. The address only changes *how you reach* the program. It never
+changes the fact that the program is running.
+
+What does change is *whose computer* runs it. Right now it is yours. If it were
+hosted, it would be a rented machine in a data centre, and that machine would
+still be running Node.js.
+
+Vercel is not an alternative to Node. They are different kinds of thing:
+
+- **Node.js** is a program that runs JavaScript. It is the engine.
+- **Vercel** is a company that rents you servers in their data centres. Those
+  servers run Node.js.
+
+So the real question is not Node versus Vercel, it is *whose computer runs this*.
+
+**Vercel would not work with this app as written.** Their servers have a
+throwaway filesystem: it is wiped on every deploy and serverless functions get a
+fresh one each time. A SQLite file cannot survive that, and neither can your
+uploaded chart images. Making it work would mean swapping SQLite for a hosted
+database and moving images to hosted file storage, which also means your entire
+trading record lives on someone else's servers. For a journal you described as
+private and single-user, that is a lot of cost and complexity for no benefit.
+
+If you ever do want it reachable from anywhere, there are two better paths than
+rewriting for Vercel:
+
+- **[Tailscale](https://tailscale.com)** puts your own machine on a private
+  network you can reach from your phone anywhere, with no code changes and
+  nothing hosted. This keeps every guarantee above intact.
+- **[Turso](https://turso.tech)** is hosted SQLite, so the queries would mostly
+  carry over rather than needing a rewrite. Chart images would still need
+  somewhere to live.
+
+Neither is worth doing until you have been using the journal long enough to know
+you want it.
 
 ## How it is built
 

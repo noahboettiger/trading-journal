@@ -61,6 +61,7 @@ export const api = {
     return req<{ path: string; size: number }[]>('/api/uploads', { method: 'POST', body: fd })
   },
   backupUrl: '/api/backup',
+  snapshot: () => req<{ file: string; size: number; skipped: boolean }>('/api/backup/snapshot', { method: 'POST' }),
   restore: (payload: unknown) =>
     req<{ restored: Record<string, number> }>('/api/backup/restore', { method: 'POST', body: JSON.stringify(payload) }),
 }

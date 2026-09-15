@@ -13,7 +13,7 @@ import { tagsRouter } from './routes/tags.js'
 import { statsRouter } from './routes/stats.js'
 import { uploadsRouter } from './routes/uploads.js'
 import { journalRouter } from './routes/journal.js'
-import { exportAll, importAll } from './lib/backup.js'
+import { exportAll, importAll, snapshot, startAutoBackup, snapshotDir } from './lib/backup.js'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const PORT = Number(process.env.PORT) || 4317
@@ -37,6 +37,14 @@ app.use('/api/journal', journalRouter)
 app.get('/api/backup', (_req, res) => {
   res.setHeader('Content-Disposition', `attachment; filename="journal-backup-${new Date().toISOString().slice(0, 10)}.json"`)
   res.json(exportAll())
+})
+app.post('/api/backup/snapshot', (_req, res, next) => {
+  try {
+    const result = snapshot({ label: 'manual' })
+    res.json({ ...result, file: path.basename(result.path) })
+  } catch (err) {
+    next(err)
+  }
 })
 app.post('/api/backup/restore', (req, res, next) => {
   try {
@@ -78,10 +86,16 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   fs.writeFileSync(PID_FILE, String(process.pid))
   const lan = lanAddress()
   console.log(`\n  Trading Journal`)
-  console.log(`  local    http://localhost:${PORT}`)
-  if (lan) console.log(`  network  http://${lan}:${PORT}   (phone on the same wifi)`)
+  console.log(`  local     http://localhost:${PORT}`)
+  if (lan) console.log(`  network   http://${lan}:${PORT}   (phone on the same wifi)`)
+  console.log(`\n  Your data lives on this computer, in these files:`)
+  console.log(`  database  ${path.join(DATA_DIR_FOR_PID, 'journal.db')}`)
+  console.log(`  charts    ${path.join(DATA_DIR_FOR_PID, 'uploads')}`)
+  console.log(`  backups   ${snapshotDir}`)
+  if (process.env.JOURNAL_BACKUP_DIR) console.log(`            (JOURNAL_BACKUP_DIR is set)`)
   if (!fs.existsSync(DIST)) console.log(`\n  No build found - API only. Run "npm run dev" for the UI.`)
   console.log('')
+  startAutoBackup()
 })
 
 // Without this, a second copy of the server dies silently and the stale one

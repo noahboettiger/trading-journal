@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Trash2, GripVertical, Save, Download, Upload, AlertTriangle } from 'lucide-react'
+import { Plus, Trash2, GripVertical, Save, Download, Upload, AlertTriangle, DatabaseBackup } from 'lucide-react'
 
 import { api } from '@/lib/api'
 import { useReference } from '@/lib/hooks'
@@ -167,6 +167,24 @@ function RuleEditor({ playbook, onSaved }: { playbook: Playbook; onSaved: () => 
 function DataSection({ onRestored }: { onRestored: () => void }) {
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<unknown>(null)
+  const [snapshotting, setSnapshotting] = useState(false)
+
+  const takeSnapshot = async () => {
+    setSnapshotting(true)
+    setError(null)
+    try {
+      const res = await api.snapshot()
+      setStatus(
+        res.skipped
+          ? 'A snapshot for this minute already exists.'
+          : `Snapshot saved: ${res.file} (${(res.size / 1024).toFixed(0)} KB)`,
+      )
+    } catch (e) {
+      setError(e)
+    } finally {
+      setSnapshotting(false)
+    }
+  }
 
   const restore = async (file: File) => {
     if (!confirm('Restoring replaces every trade, rule and list in this journal. Continue?')) return
@@ -183,9 +201,12 @@ function DataSection({ onRestored }: { onRestored: () => void }) {
 
   return (
     <Card>
-      <CardHeader title="Backup and restore" subtitle="Your data lives in data/journal.db on this machine" />
+      <CardHeader title="Backup and restore" subtitle="Everything lives in the data/ folder on this computer" />
       <div className="space-y-3 p-4">
         <div className="flex flex-wrap gap-2">
+          <button className="btn-primary" onClick={takeSnapshot} disabled={snapshotting}>
+            <DatabaseBackup size={15} /> {snapshotting ? 'Saving...' : 'Snapshot now'}
+          </button>
           <a className="btn-ghost" href={api.backupUrl} download>
             <Download size={15} /> Download backup
           </a>
@@ -203,11 +224,17 @@ function DataSection({ onRestored }: { onRestored: () => void }) {
             />
           </label>
         </div>
-        <p className="flex items-start gap-2 text-xs leading-relaxed text-ink-faint">
-          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-          The JSON backup covers trades, rules and lists. Chart screenshots live as files in <code>data/uploads</code>, so
-          copy that folder too if you are moving machines.
-        </p>
+        <div className="space-y-2 text-xs leading-relaxed text-ink-faint">
+          <p>
+            <strong className="text-ink-muted">Snapshot now</strong> writes a complete copy of the database to{' '}
+            <code>data/backups/</code>. This also happens automatically once a day, keeping the 30 most recent.
+          </p>
+          <p className="flex items-start gap-2">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+            Neither a snapshot nor the JSON download includes your chart screenshots, which are ordinary image files in{' '}
+            <code>data/uploads/</code>. Copying the whole <code>data/</code> folder is the one complete backup.
+          </p>
+        </div>
         {status && <p className="text-xs text-win">{status}</p>}
         <ErrorNote error={error} />
       </div>

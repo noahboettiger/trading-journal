@@ -11,7 +11,8 @@
     "start": "node --disable-warning=ExperimentalWarning server/index.js",
     "typecheck": "tsc --noEmit",
     "seed:demo": "node scripts/seed-demo.mjs",
-    "reset:trades": "node scripts/reset-trades.mjs"
+    "reset:trades": "node scripts/reset-trades.mjs",
+    "backup": "node --disable-warning=ExperimentalWarning scripts/backup.mjs"
   },
   "dependencies": {
     "date-fns": "^4.1.0",

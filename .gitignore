@@ -11,3 +11,4 @@ data/uploads/*
 .DS_Store
 *.log
 data/.server.pid
+data/backups/
