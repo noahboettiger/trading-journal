@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --surface-0: 246 245 242;
+  --surface-1: 255 255 255;
+  --surface-2: 244 244 241;
+  --surface-3: 234 234 230;
+  --line: 223 221 216;
+  --ink: 22 25 28;
+  --ink-muted: 92 99 106;
+  --ink-faint: 141 148 155;
+  --win: 21 145 68;
+  --loss: 201 42 42;
+  --flat: 120 128 136;
+  --accent: 21 145 68;
+  color-scheme: light;
+}
+
+.dark {
+  --surface-0: 10 12 14;
+  --surface-1: 19 22 25;
+  --surface-2: 27 31 35;
+  --surface-3: 38 43 48;
+  --line: 45 51 57;
+  --ink: 236 239 242;
+  --ink-muted: 151 159 168;
+  --ink-faint: 107 115 124;
+  --win: 74 222 128;
+  --loss: 248 113 113;
+  --flat: 148 163 184;
+  --accent: 74 222 128;
+  color-scheme: dark;
+}
+
+@layer base {
+  * { @apply border-line; }
+  body {
+    @apply bg-surface-0 text-ink antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'tnum';
+  }
+  /* Numbers line up in tables and stat tiles. */
+  .tnum { font-variant-numeric: tabular-nums; }
+}
+
+@layer components {
+  /* min-w-0 matters: as a grid or flex item a card defaults to min-width:auto,
+     which lets a wide scrollable table inside it stretch the whole page
+     instead of scrolling within its own container. */
+  .card { @apply min-w-0 rounded-xl2 border border-line bg-surface-1; }
+  .label { @apply text-[11px] font-semibold uppercase tracking-wider text-ink-faint; }
+
+  .input {
+    @apply w-full bg-surface-2 border border-line rounded-lg px-3 py-2 text-sm text-ink
+           placeholder:text-ink-faint outline-none transition
+           focus:border-accent/60 focus:ring-2 focus:ring-accent/20;
+  }
+  .input:disabled { @apply opacity-50 cursor-not-allowed; }
+  textarea.input { @apply leading-relaxed resize-y; }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium
+           transition select-none whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .btn-primary { @apply btn bg-accent text-surface-0 hover:brightness-110; }
+  .btn-ghost   { @apply btn border border-line bg-surface-1 text-ink hover:bg-surface-2; }
+  .btn-subtle  { @apply btn text-ink-muted hover:bg-surface-2 hover:text-ink; }
+  .btn-danger  { @apply btn border border-loss/40 text-loss hover:bg-loss/10; }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2
+           px-2.5 py-1 text-xs font-medium text-ink-muted;
+  }
+}
+
+/* Hide the number-input spinners; these are money fields, not steppers. */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type='number'] { -moz-appearance: textfield; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgb(var(--line)); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: rgb(var(--ink-faint)); }

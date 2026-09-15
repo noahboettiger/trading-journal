@@ -1,0 +1,260 @@
+import { db } from './db.js'
+import {
+  deriveNetPnl, deriveGrossPnl, deriveRiskAmount, resultR, deriveOutcome, plannedRR,
+  daysHeld, dteAtEntry, dteAtExit, returnOnRisk, num,
+} from '../../shared/calc.js'
+
+/** Columns a client is allowed to write. Anything else in a payload is ignored. */
+export const TRADE_COLUMNS = [
+  'playbook_id', 'asset_class', 'trade_style', 'symbol', 'direction', 'status', 'outcome',
+  'trade_date', 'exit_date', 'entry_time', 'exit_time', 'session', 'timeframe', 'setup', 'trade_source',
+  'contracts', 'entry_price', 'exit_price', 'stop_price', 'target_price', 'point_value',
+  'option_type', 'option_side', 'strike', 'expiration', 'entry_premium', 'exit_premium',
+  'underlying_entry', 'underlying_stop', 'underlying_target', 'dte_at_entry',
+  'delta', 'theta', 'vega', 'iv_at_entry',
+  'risk_amount', 'planned_rr', 'gross_pnl', 'commissions', 'net_pnl', 'result_r_override',
+  'execution_grade', 'emotional_state', 'notes', 'lesson_learned', 'reflections',
+]
+
+const NUMERIC_COLUMNS = new Set([
+  'playbook_id', 'contracts', 'entry_price', 'exit_price', 'stop_price',
+  'target_price', 'point_value', 'strike', 'entry_premium', 'exit_premium',
+  'underlying_entry', 'underlying_stop', 'underlying_target', 'dte_at_entry',
+  'delta', 'theta', 'vega', 'iv_at_entry', 'risk_amount', 'planned_rr', 'gross_pnl',
+  'commissions', 'net_pnl', 'result_r_override',
+])
+
+/** Coerce a raw request body into a column->value map, dropping unknown keys. */
+function normalise(body) {
+  const row = {}
+  for (const col of TRADE_COLUMNS) {
+    if (!(col in body)) continue
+    const raw = body[col]
+    if (NUMERIC_COLUMNS.has(col)) {
+      row[col] = num(raw)
+    } else if (raw === '' || raw === undefined) {
+      row[col] = null
+    } else {
+      row[col] = raw
+    }
+  }
+  return row
+}
+
+const DERIVED_COLUMNS = ['gross_pnl', 'net_pnl', 'planned_rr', 'risk_amount', 'outcome', 'commissions']
+
+/**
+ * Fill in money fields the client did not send explicitly.
+ *
+ * `provided` is the set of columns actually present in the request body. A
+ * derived value overwrites only when the client stayed silent AND the
+ * derivation produced a real number. That way editing an exit price does
+ * recompute P&L, while editing only the notes never clobbers a P&L the user
+ * typed by hand for a trade that has no price fields filled in.
+ */
+function applyDerivations(row, provided = new Set()) {
+  if (row.commissions === null || row.commissions === undefined) row.commissions = 0
+
+  if (!provided.has('gross_pnl')) {
+    const v = deriveGrossPnl(row)
+    if (v !== null) row.gross_pnl = v
+  }
+  if (!provided.has('net_pnl')) {
+    const v = deriveNetPnl(row)
+    if (v !== null) row.net_pnl = v
+  }
+  if (!provided.has('planned_rr')) {
+    const v = plannedRR(row)
+    if (v !== null) row.planned_rr = v
+  }
+  if (!provided.has('risk_amount')) {
+    const v = deriveRiskAmount(row)
+    if (v !== null) row.risk_amount = v
+  }
+  if (!provided.has('outcome')) {
+    const v = deriveOutcome({ ...row, outcome: null })
+    if (v !== null) row.outcome = v
+  }
+  return row
+}
+
+const providedColumns = (body) => new Set(TRADE_COLUMNS.filter((c) => c in body))
+
+/** Attach computed fields plus rule checks, tags and images. */
+export function enrich(trade, { withChildren = true } = {}) {
+  if (!trade) return null
+  const out = {
+    ...trade,
+    result_r: resultR(trade),
+    computed_rr: plannedRR(trade),
+    days_held: daysHeld(trade),
+    dte_entry: dteAtEntry(trade),
+    dte_exit: dteAtExit(trade),
+    return_on_risk: returnOnRisk(trade),
+  }
+  if (withChildren) {
+    out.rule_checks = db
+      .prepare('SELECT * FROM trade_rule_checks WHERE trade_id = ? ORDER BY sort_order, id')
+      .all(trade.id)
+      .map((c) => ({ ...c, checked: !!c.checked, is_critical: !!c.is_critical }))
+    out.tags = db
+      .prepare('SELECT t.* FROM tags t JOIN trade_tags tt ON tt.tag_id = t.id WHERE tt.trade_id = ? ORDER BY t.name')
+      .all(trade.id)
+    out.images = db
+      .prepare('SELECT * FROM trade_images WHERE trade_id = ? ORDER BY sort_order, id')
+      .all(trade.id)
+  }
+  out.playbook_name = trade.playbook_id
+    ? db.prepare('SELECT name FROM playbooks WHERE id = ?').get(trade.playbook_id)?.name ?? null
+    : null
+  return out
+}
+
+export function nextTradeNumber() {
+  const row = db.prepare('SELECT COALESCE(MAX(trade_no), 0) AS n FROM trades').get()
+  return row.n + 1
+}
+
+function replaceChildren(tradeId, body) {
+  if (Array.isArray(body.rule_checks)) {
+    db.prepare('DELETE FROM trade_rule_checks WHERE trade_id = ?').run(tradeId)
+    const ins = db.prepare(
+      `INSERT INTO trade_rule_checks (trade_id, rule_id, section, rule_text, is_critical, checked, note, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    body.rule_checks.forEach((c, i) =>
+      ins.run(
+        tradeId,
+        num(c.rule_id),
+        c.section ?? '',
+        c.rule_text ?? '',
+        c.is_critical ? 1 : 0,
+        c.checked ? 1 : 0,
+        c.note ?? null,
+        c.sort_order ?? i,
+      ),
+    )
+  }
+
+  if (Array.isArray(body.tag_ids)) {
+    db.prepare('DELETE FROM trade_tags WHERE trade_id = ?').run(tradeId)
+    const ins = db.prepare('INSERT OR IGNORE INTO trade_tags (trade_id, tag_id) VALUES (?, ?)')
+    body.tag_ids.forEach((id) => {
+      const n = num(id)
+      if (n !== null) ins.run(tradeId, n)
+    })
+  }
+
+  if (Array.isArray(body.images)) {
+    db.prepare('DELETE FROM trade_images WHERE trade_id = ?').run(tradeId)
+    const ins = db.prepare('INSERT INTO trade_images (trade_id, path, caption, sort_order) VALUES (?, ?, ?, ?)')
+    body.images.forEach((img, i) => {
+      if (img?.path) ins.run(tradeId, img.path, img.caption ?? null, img.sort_order ?? i)
+    })
+  }
+}
+
+export function createTrade(body) {
+  const row = applyDerivations(normalise(body), providedColumns(body))
+  if (!row.symbol) throw Object.assign(new Error('symbol is required'), { status: 400 })
+  if (!row.trade_date) throw Object.assign(new Error('trade_date is required'), { status: 400 })
+
+  const tradeNo = num(body.trade_no) ?? nextTradeNumber()
+  const cols = ['trade_no', ...Object.keys(row)]
+  const values = [tradeNo, ...Object.values(row)]
+
+  db.exec('BEGIN')
+  try {
+    const info = db
+      .prepare(`INSERT INTO trades (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`)
+      .run(...values)
+    const id = Number(info.lastInsertRowid)
+    replaceChildren(id, body)
+    db.exec('COMMIT')
+    return getTrade(id)
+  } catch (err) {
+    db.exec('ROLLBACK')
+    throw err
+  }
+}
+
+export function updateTrade(id, body) {
+  const existing = db.prepare('SELECT * FROM trades WHERE id = ?').get(id)
+  if (!existing) return null
+
+  // Derive against the merged record so editing one price recomputes the rest.
+  const patch = normalise(body)
+  const merged = applyDerivations({ ...existing, ...patch }, providedColumns(body))
+  for (const col of DERIVED_COLUMNS) {
+    if (merged[col] !== existing[col]) patch[col] = merged[col]
+  }
+
+  db.exec('BEGIN')
+  try {
+    if (body.trade_no !== undefined) patch.trade_no = num(body.trade_no)
+    const keys = Object.keys(patch)
+    if (keys.length) {
+      db.prepare(
+        `UPDATE trades SET ${keys.map((k) => `${k} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`,
+      ).run(...keys.map((k) => patch[k]), id)
+    }
+    replaceChildren(id, body)
+    db.exec('COMMIT')
+    return getTrade(id)
+  } catch (err) {
+    db.exec('ROLLBACK')
+    throw err
+  }
+}
+
+export function getTrade(id) {
+  return enrich(db.prepare('SELECT * FROM trades WHERE id = ?').get(id))
+}
+
+export function deleteTrade(id) {
+  return db.prepare('DELETE FROM trades WHERE id = ?').run(id).changes > 0
+}
+
+/** Filtered trade list. Filters are all optional and combine with AND. */
+export function listTrades(q = {}) {
+  const where = []
+  const params = []
+  const eq = (col, val) => {
+    if (val !== undefined && val !== null && val !== '' && val !== 'all') {
+      where.push(`${col} = ?`)
+      params.push(val)
+    }
+  }
+  eq('playbook_id', num(q.playbook_id))
+  eq('asset_class', q.asset_class)
+  eq('trade_style', q.trade_style)
+  eq('option_side', q.option_side)
+  eq('outcome', q.outcome)
+  eq('direction', q.direction)
+  eq('session', q.session)
+  eq('setup', q.setup)
+  eq('trade_source', q.trade_source)
+  eq('status', q.status)
+  if (q.symbol) {
+    where.push('UPPER(symbol) = UPPER(?)')
+    params.push(q.symbol)
+  }
+  if (q.from) {
+    where.push('trade_date >= ?')
+    params.push(q.from)
+  }
+  if (q.to) {
+    where.push('trade_date <= ?')
+    params.push(q.to)
+  }
+  if (q.search) {
+    where.push('(notes LIKE ? OR lesson_learned LIKE ? OR reflections LIKE ? OR setup LIKE ? OR symbol LIKE ?)')
+    const like = `%${q.search}%`
+    params.push(like, like, like, like, like)
+  }
+
+  const sql = `SELECT * FROM trades ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+               ORDER BY trade_date DESC, trade_no DESC`
+  const rows = db.prepare(sql).all(...params)
+  return rows.map((r) => enrich(r, { withChildren: q.withChildren !== false }))
+}
