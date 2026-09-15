@@ -12,7 +12,34 @@ you can back up or copy.
 This runs on **your own computer**. There is no hosted version, so `localhost`
 only works once the server is running on the machine you are browsing from.
 
-You need [Node.js](https://nodejs.org) 22 or newer (`node --version` to check).
+### Installing Node.js
+
+Node.js is free and open source. There is nothing to buy and no account to make.
+
+Go to **[nodejs.org](https://nodejs.org)** and download the **LTS** version (the
+left-hand button, the one marked "Recommended for Most Users"). On Windows that
+gives you a `.msi` installer, 64-bit by default, which is what you want.
+
+Run it and click Next through every screen, accepting the defaults. Two things
+worth knowing about that installer:
+
+- The **custom setup** screen showing a tree of components is just letting you
+  deselect parts. Leave it alone; the defaults are correct.
+- There is a checkbox for **"Tools for Native Modules"** (it mentions Chocolatey,
+  Python and Visual Studio build tools). **Leave it unchecked.** It installs
+  several gigabytes and takes a long time. This journal has no components that
+  need compiling, which was deliberate.
+
+You may also see a page about Node being supported by Vercel and other partners.
+That is sponsorship credit for the Node project, not something you sign up for.
+
+Then open Command Prompt or PowerShell and check it worked:
+
+```bash
+node --version
+```
+
+You want v22 or higher.
 
 ```bash
 git clone https://github.com/noahboettiger/trading-journal.git
@@ -50,11 +77,21 @@ Runs the API on 4317 and Vite on 5173 with hot reload. Open http://localhost:517
 | --- | --- |
 | `npm run typecheck` | Type-check without emitting |
 | `npm run backup` | Snapshot the database to `data/backups/` |
-| `PORT=4318 npm start` | Run on a different port |
-| `JOURNAL_DATA_DIR=... npm start` | Keep all your data somewhere else |
-| `JOURNAL_BACKUP_DIR=... npm start` | Send only the backups somewhere else |
+| `npm run reset:trades` | Delete every trade, keeping rules and lists |
+
+Settings such as the port and where data is stored go in a `.env` file. Copy
+`.env.example` to `.env` to get started.
 
 ---
+
+### Running it on a second computer
+
+Install Node there, clone the repo, `npm install && npm run build && npm start`,
+then copy your `data/` folder across. The journal has no licence check, no
+account and no per-machine anything.
+
+If both machines point `JOURNAL_DATA_DIR` at the same synced folder they share
+one journal, but only run one at a time.
 
 ## What it tracks
 
@@ -300,8 +337,16 @@ means copying the `data/` folder across yourself.
 
 ### Backups
 
-The journal snapshots itself **automatically once a day** into `data/backups/`,
-keeping the 30 most recent. You can also take one on demand:
+**Every time you save a trade, the journal backs itself up.** Create, edit or
+delete, and within a few seconds `data/backups/journal-latest.db` is a complete
+copy including that change. It is written to a temporary file and renamed into
+place, so a crash mid-write can never destroy the previous good copy. Closing the
+server flushes it immediately.
+
+On top of that, a **timestamped snapshot once a day**, keeping the 30 most
+recent. The rolling copy answers "did I just lose what I typed"; the daily ones
+answer "can I get back to how this looked two weeks ago". You can also take one
+on demand:
 
 ```bash
 npm run backup
@@ -319,21 +364,28 @@ snapshots, or copy the entire `data/` folder, never `journal.db` by itself.
 Settings → Data also has a JSON export covering trades, rules and lists. That one
 is human-readable and portable, but it does not include your chart images.
 
+### Settings, without fighting your shell
+
+Copy `.env.example` to `.env` and edit it. Every option below goes in that file,
+one per line, and works identically on Windows, macOS and Linux:
+
+```
+JOURNAL_BACKUP_DIR=C:\Users\YourName\My Drive\TradingJournalBackups
+```
+
+Then `npm start` as usual. The file is gitignored and never leaves your machine.
+
 ### Protecting against a dead drive
 
-Two ways, and the second is the safer default.
+Two ways, and the first is the safer default.
 
 **Option A: backups only to the cloud (recommended)**
 
 Keep the live database on local disk and send only the snapshots to a synced
-folder:
+folder. In your `.env`:
 
-```bash
-# Google Drive
-JOURNAL_BACKUP_DIR="$HOME/Google Drive/My Drive/TradingJournalBackups" npm start
-
-# Dropbox
-JOURNAL_BACKUP_DIR="$HOME/Dropbox/TradingJournalBackups" npm start
+```
+JOURNAL_BACKUP_DIR=C:\Users\YourName\My Drive\TradingJournalBackups
 ```
 
 Snapshots are write-once files, so a sync service handles them perfectly. The
@@ -342,8 +394,8 @@ off-machine protection with none of the risk below.
 
 **Option B: everything in the cloud folder**
 
-```bash
-JOURNAL_DATA_DIR="$HOME/Dropbox/TradingJournal" npm start
+```
+JOURNAL_DATA_DIR=C:\Users\YourName\Dropbox\TradingJournal
 ```
 
 The database, chart screenshots and snapshots all move there, which also lets a

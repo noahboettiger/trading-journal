@@ -92,7 +92,9 @@ export function snapshot({ label = 'auto' } = {}) {
 function prune() {
   const files = fs
     .readdirSync(SNAPSHOT_DIR)
-    .filter((f) => f.startsWith('journal-') && f.endsWith('.db'))
+    // The rolling backup is deliberately excluded: it is always the newest
+    // file and must never be pruned away.
+    .filter((f) => f.startsWith('journal-') && f.endsWith('.db') && f !== 'journal-latest.db')
     .sort()
   for (const stale of files.slice(0, Math.max(0, files.length - KEEP_SNAPSHOTS))) {
     try {
@@ -101,6 +103,58 @@ function prune() {
       /* already gone */
     }
   }
+}
+
+/**
+ * A single rolling copy, overwritten after every change. The daily snapshots
+ * give you history; this gives you "nothing I typed is more than a few seconds
+ * from being safe". Kept separate so pruning never touches it.
+ */
+const LATEST_PATH = () => path.join(SNAPSHOT_DIR, 'journal-latest.db')
+
+let pending = null
+let lastWrite = 0
+const DEBOUNCE_MS = 3000
+
+function writeLatest() {
+  try {
+    fs.mkdirSync(SNAPSHOT_DIR, { recursive: true })
+    const target = LATEST_PATH()
+    const temp = `${target}.tmp`
+    // Write to a temp file and rename, so a crash mid-write can never leave a
+    // half-written backup where a good one used to be. Rename is atomic.
+    fs.rmSync(temp, { force: true })
+    db.exec(`VACUUM INTO '${temp.replace(/'/g, "''")}'`)
+    fs.renameSync(temp, target)
+    lastWrite = Date.now()
+  } catch (err) {
+    console.error('[backup] rolling backup failed:', err.message)
+  }
+}
+
+/**
+ * Called after every trade create, update and delete. Debounced, so saving a
+ * trade backs it up within a few seconds while a burst of edits does not
+ * rewrite the file over and over.
+ */
+export function backupSoon() {
+  if (pending) return
+  const wait = Math.max(0, DEBOUNCE_MS - (Date.now() - lastWrite))
+  pending = setTimeout(() => {
+    pending = null
+    writeLatest()
+  }, wait)
+  pending.unref?.()
+}
+
+/** Force the rolling backup to disk immediately, cancelling any pending run. */
+export function backupNow() {
+  if (pending) {
+    clearTimeout(pending)
+    pending = null
+  }
+  writeLatest()
+  return LATEST_PATH()
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000

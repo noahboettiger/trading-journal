@@ -1,4 +1,5 @@
 import { db } from './db.js'
+import { backupSoon } from './backup.js'
 import {
   deriveNetPnl, deriveGrossPnl, deriveRiskAmount, resultR, deriveOutcome, plannedRR,
   daysHeld, dteAtEntry, dteAtExit, returnOnRisk, num,
@@ -182,6 +183,7 @@ export function createTrade(body) {
     const id = Number(info.lastInsertRowid)
     replaceChildren(id, body)
     db.exec('COMMIT')
+    backupSoon()
     return getTrade(id)
   } catch (err) {
     db.exec('ROLLBACK')
@@ -211,6 +213,7 @@ export function updateTrade(id, body) {
     }
     replaceChildren(id, body)
     db.exec('COMMIT')
+    backupSoon()
     return getTrade(id)
   } catch (err) {
     db.exec('ROLLBACK')
@@ -223,7 +226,9 @@ export function getTrade(id) {
 }
 
 export function deleteTrade(id) {
-  return db.prepare('DELETE FROM trades WHERE id = ?').run(id).changes > 0
+  const deleted = db.prepare('DELETE FROM trades WHERE id = ?').run(id).changes > 0
+  if (deleted) backupSoon()
+  return deleted
 }
 
 /** Filtered trade list. Filters are all optional and combine with AND. */

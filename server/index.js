@@ -13,7 +13,7 @@ import { tagsRouter } from './routes/tags.js'
 import { statsRouter } from './routes/stats.js'
 import { uploadsRouter } from './routes/uploads.js'
 import { journalRouter } from './routes/journal.js'
-import { exportAll, importAll, snapshot, startAutoBackup, snapshotDir } from './lib/backup.js'
+import { exportAll, importAll, snapshot, startAutoBackup, snapshotDir, backupNow } from './lib/backup.js'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const PORT = Number(process.env.PORT) || 4317
@@ -113,6 +113,13 @@ server.on('error', (err) => {
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, () => {
+    // Flush any debounced backup before going away, so closing the terminal
+    // right after saving a trade still leaves that trade backed up.
+    try {
+      backupNow()
+    } catch {
+      /* best effort on the way out */
+    }
     try {
       fs.unlinkSync(PID_FILE)
     } catch {
