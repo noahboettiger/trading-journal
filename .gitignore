@@ -12,3 +12,4 @@ data/uploads/*
 *.log
 data/.server.pid
 data/backups/
+data/server.log

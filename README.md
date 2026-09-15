@@ -85,6 +85,47 @@ npm run seed:demo      # 15 example trades across futures and options
 npm run reset:trades   # delete them again, keeping your rules and lists
 ```
 
+### Opening it day to day
+
+Typing commands every time gets old fast. Three ways to avoid it, easiest first.
+
+**1. Double-click the launcher.** In the project folder there is a file called
+**Start Journal.bat** (`start-journal.sh` on macOS and Linux). Double-click it.
+It starts the journal and opens your browser automatically. Right-click it and
+"Send to → Desktop" to get an icon you can click every morning.
+
+You still get a window, and closing it stops the journal. That is the tradeoff
+for the simplest possible setup.
+
+**2. Start it automatically when you log in.** Then it is always running, and the
+bookmark below just works. No window, no commands, nothing to remember.
+
+1. Press **Windows key + R**, type `shell:startup`, press Enter. A folder opens.
+2. Go to `scripts\windows` in the project, right-click
+   **journal-background.vbs**, choose **Copy**.
+3. Back in the Startup folder, right-click and choose **Paste shortcut**. Not
+   plain Paste, a shortcut.
+
+Log out and back in (or restart) and the journal is running invisibly. Anything
+it prints goes to `data/server.log`. To undo it, delete that shortcut.
+
+**3. Bookmark it.** Either way, bookmark **http://localhost:4317** and name it
+"Trading Journal". That is a real URL and bookmarks fine.
+
+### Do you need to buy a domain?
+
+No. There is nothing to pay for here, ever.
+
+`localhost` is a name your computer already has for itself, built into every
+operating system. It costs nothing because it never leaves your machine. Domain
+names exist so *other people* can find *your* server on the public internet,
+which is the opposite of what this is for.
+
+If `http://localhost:4317` bothers you aesthetically you can add a nicer alias by
+editing the Windows hosts file, but it needs administrator access, it still needs
+the `:4317` on the end, and it changes nothing about how the journal works. Not
+worth it. Bookmark it and forget the URL exists.
+
 ### While developing
 
 ```bash

@@ -1,4 +1,5 @@
 import './lib/env.js' // must come first: later imports read process.env at load
+import { spawn } from 'node:child_process'
 import express from 'express'
 import path from 'node:path'
 import fs from 'node:fs'
@@ -72,6 +73,25 @@ app.use((err, _req, res, _next) => {
   res.status(status).json({ error: err.message || 'Internal error' })
 })
 
+/**
+ * Open the journal in the default browser once the server is listening. Opt in
+ * with JOURNAL_OPEN_BROWSER=1, which the desktop launcher scripts set, so
+ * running from a terminal stays quiet.
+ */
+function openBrowser(url) {
+  const command =
+    process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url]]
+    : process.platform === 'darwin' ? ['open', [url]]
+    : ['xdg-open', [url]]
+  try {
+    const child = spawn(command[0], command[1], { detached: true, stdio: 'ignore' })
+    child.on('error', () => {}) // no browser available; not worth failing over
+    child.unref()
+  } catch {
+    /* ignore */
+  }
+}
+
 function lanAddress() {
   for (const ifaces of Object.values(os.networkInterfaces())) {
     for (const i of ifaces ?? []) {
@@ -97,15 +117,18 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   if (!fs.existsSync(DIST)) console.log(`\n  No build found - API only. Run "npm run dev" for the UI.`)
   console.log('')
   startAutoBackup()
+  if (process.env.JOURNAL_OPEN_BROWSER === '1') openBrowser(`http://localhost:${PORT}`)
 })
 
 // Without this, a second copy of the server dies silently and the stale one
 // keeps answering on the port, which looks like code changes not taking effect.
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
-    console.error(`\n  Port ${PORT} is already in use.`)
-    console.error(`  Another copy of the journal is probably running.`)
-    console.error(`  Stop it, or start this one on a different port:  PORT=4318 npm start\n`)
+    console.error(`\n  The journal is already running on port ${PORT}.`)
+    console.error(`  Open it here:  http://localhost:${PORT}`)
+    console.error(``)
+    console.error(`  If you believe nothing is running, something else is using that`)
+    console.error(`  port. Put PORT=4318 in your .env file to move the journal.\n`)
   } else {
     console.error('[server]', err)
   }
