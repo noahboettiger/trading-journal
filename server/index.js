@@ -92,6 +92,44 @@ function openBrowser(url) {
   }
 }
 
+/**
+ * Newest modification time under a path, walking directories.
+ * Returns 0 for anything missing, so a comparison against it is always false.
+ */
+function newestMtime(target) {
+  try {
+    const stat = fs.statSync(target)
+    if (!stat.isDirectory()) return stat.mtimeMs
+    return fs
+      .readdirSync(target)
+      .reduce((newest, entry) => Math.max(newest, newestMtime(path.join(target, entry))), 0)
+  } catch {
+    return 0
+  }
+}
+
+/**
+ * Warn when the built app is older than the source it was built from.
+ *
+ * Without this, pulling an update and forgetting to rebuild silently serves the
+ * previous version, and it looks like the update did nothing.
+ */
+function warnIfBuildIsStale() {
+  const builtAt = newestMtime(path.join(DIST, 'index.html'))
+  if (!builtAt) return
+  const sourceAt = Math.max(
+    newestMtime(path.join(ROOT, 'src')),
+    newestMtime(path.join(ROOT, 'index.html')),
+    newestMtime(path.join(ROOT, 'package.json')),
+  )
+  if (sourceAt <= builtAt) return
+
+  console.log(`  NOTE: the app has changed since it was last built, so you are`)
+  console.log(`  seeing the previous version. Rebuild with:  npm run build`)
+  console.log(`  (or double-click "Update Journal.bat", which does it for you)`)
+  console.log('')
+}
+
 function lanAddress() {
   for (const ifaces of Object.values(os.networkInterfaces())) {
     for (const i of ifaces ?? []) {
@@ -116,6 +154,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   if (process.env.JOURNAL_BACKUP_DIR) console.log(`            (JOURNAL_BACKUP_DIR is set)`)
   if (!fs.existsSync(DIST)) console.log(`\n  No build found - API only. Run "npm run dev" for the UI.`)
   console.log('')
+  warnIfBuildIsStale()
   startAutoBackup()
   if (process.env.JOURNAL_OPEN_BROWSER === '1') openBrowser(`http://localhost:${PORT}`)
 })

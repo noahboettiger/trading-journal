@@ -89,13 +89,22 @@ npm run reset:trades   # delete them again, keeping your rules and lists
 
 Typing commands every time gets old fast. Three ways to avoid it, easiest first.
 
-**1. Double-click the launcher.** In the project folder there is a file called
-**Start Journal.bat** (`start-journal.sh` on macOS and Linux). Double-click it.
-It starts the journal and opens your browser automatically. Right-click it and
-"Send to → Desktop" to get an icon you can click every morning.
+**1. Double-click the launcher.** In the project folder on your computer there
+is a file called **Start Journal.bat** (`start-journal.sh` on macOS and Linux).
+Double-click it. It starts the journal and opens your browser automatically.
+Right-click it and "Send to → Desktop" to get an icon you can click every
+morning.
+
+It installs dependencies and builds the app first if either is missing, so it
+works on a copy you have just downloaded, with nothing typed.
 
 You still get a window, and closing it stops the journal. That is the tradeoff
 for the simplest possible setup.
+
+Note that these files have to exist **on your computer**. Clicking a file on
+github.com only displays it in the browser; that page is a view of the code, not
+a copy of it. If a file is on GitHub but not in your folder, you need to update
+your copy.
 
 **2. Start it automatically when you log in.** Then it is always running, and the
 bookmark below just works. No window, no commands, nothing to remember.
@@ -111,6 +120,23 @@ it prints goes to `data/server.log`. To undo it, delete that shortcut.
 
 **3. Bookmark it.** Either way, bookmark **http://localhost:4317** and name it
 "Trading Journal". That is a real URL and bookmarks fine.
+
+### Getting updates
+
+Double-click **Update Journal.bat** (`./update-journal.sh` elsewhere). It pulls
+the latest code, installs anything new and rebuilds, in one step. Or by hand:
+
+```bash
+git pull
+npm install
+npm run build
+```
+
+Your `data/` folder is deliberately outside version control, so updating never
+touches your trades, charts or backups.
+
+If you pull an update and forget to rebuild, the journal notices on startup and
+tells you rather than quietly serving the old version.
 
 ### Do you need to buy a domain?
 

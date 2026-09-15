@@ -1,0 +1,47 @@
+@echo off
+title Update Trading Journal
+cd /d "%~dp0"
+
+echo.
+echo   Updating the trading journal
+echo.
+echo   Your trades are not touched by this. The data folder is kept
+echo   separate from the code on purpose.
+echo.
+
+where git >nul 2>nul
+if errorlevel 1 (
+  echo   Git is not installed, so this cannot fetch updates automatically.
+  echo   Install it from https://git-scm.com/download/win and run this again,
+  echo   or download a fresh ZIP from GitHub and copy your data folder across.
+  echo.
+  pause
+  exit /b 1
+)
+
+echo   Fetching the latest version...
+call git pull
+if errorlevel 1 goto failed
+echo.
+
+echo   Installing anything new...
+call npm install
+if errorlevel 1 goto failed
+echo.
+
+echo   Rebuilding...
+call npm run build
+if errorlevel 1 goto failed
+
+echo.
+echo   Done. Start the journal with "Start Journal.bat".
+echo.
+pause
+exit /b 0
+
+:failed
+echo.
+echo   Update failed. Copy the error text above and ask about it.
+echo.
+pause
+exit /b 1
