@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "seed:demo": "node scripts/seed-demo.mjs",
     "reset:trades": "node scripts/reset-trades.mjs",
-    "backup": "node --disable-warning=ExperimentalWarning scripts/backup.mjs"
+    "backup": "node --disable-warning=ExperimentalWarning scripts/backup.mjs",
+    "stop": "node --disable-warning=ExperimentalWarning scripts/stop.mjs"
   },
   "dependencies": {
     "date-fns": "^4.1.0",

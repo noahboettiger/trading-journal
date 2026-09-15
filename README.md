@@ -106,25 +106,40 @@ github.com only displays it in the browser; that page is a view of the code, not
 a copy of it. If a file is on GitHub but not in your folder, you need to update
 your copy.
 
-**2. Start it automatically when you log in.** Then it is always running, and the
-bookmark below just works. No window, no commands, nothing to remember.
+**2. Start it automatically when you log in.** Then it is always running, the
+bookmark simply works, and there is no window and nothing to remember.
 
 1. Press **Windows key + R**, type `shell:startup`, press Enter. A folder opens.
-2. Go to `scripts\windows` in the project, right-click
-   **journal-background.vbs**, choose **Copy**.
-3. Back in the Startup folder, right-click and choose **Paste shortcut**. Not
-   plain Paste, a shortcut.
+   Leave it open.
+2. In another window, go to your project folder, then into `scripts\windows`.
+3. Right-click **journal-background.vbs** and choose **Copy**. On Windows 11 you
+   may need **Show more options** to see the full menu.
+4. Back in the Startup folder, right-click an empty area and choose
+   **Paste shortcut**.
 
-Log out and back in (or restart) and the journal is running invisibly. Anything
-it prints goes to `data/server.log`. To undo it, delete that shortcut.
+That last step matters: **Paste shortcut**, not a plain Paste. A plain paste
+copies the file out of the project and it can no longer find the rest of the
+code. The script checks for this and tells you if it happens.
+
+To start it right now without logging out, double-click that same
+`journal-background.vbs`. Nothing visible happens, which is the point. Give it a
+few seconds, then open the bookmark.
+
+**Stopping it:** double-click **Stop Journal.bat**, or run `npm run stop`.
+
+**Undoing autostart:** delete the shortcut from the Startup folder.
+
+**If nothing loads:** check `data/server.log`, which is where a background copy
+writes everything it would otherwise have printed to a window.
 
 **3. Bookmark it.** Either way, bookmark **http://localhost:4317** and name it
 "Trading Journal". That is a real URL and bookmarks fine.
 
 ### Getting updates
 
-Double-click **Update Journal.bat** (`./update-journal.sh` elsewhere). It pulls
-the latest code, installs anything new and rebuilds, in one step. Or by hand:
+Double-click **Update Journal.bat** (`./update-journal.sh` elsewhere). It stops
+a running copy, pulls the latest code, installs anything new, rebuilds, and
+starts it again if it had been running in the background. Or by hand:
 
 ```bash
 git pull
@@ -167,6 +182,7 @@ Runs the API on 4317 and Vite on 5173 with hot reload. Open http://localhost:517
 | `npm run typecheck` | Type-check without emitting |
 | `npm run backup` | Snapshot the database to `data/backups/` |
 | `npm run reset:trades` | Delete every trade, keeping rules and lists |
+| `npm run stop` | Stop a journal running in the background |
 
 Settings such as the port and where data is stored go in a `.env` file. Copy
 `.env.example` to `.env` to get started.
