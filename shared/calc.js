@@ -61,9 +61,12 @@ export function deriveRiskAmount(t) {
   if (contracts === null) return null
 
   if (t.asset_class === 'options') {
-    // Only long premium has a knowable max loss. Short premium risk depends on
-    // whether it is cash-secured, spread or naked, so it stays a manual entry.
-    if (t.option_side === 'sell') return null
+    if (t.option_side === 'sell') {
+      // A cash-secured put ties up the strike in cash, and that collateral is
+      // the honest risk figure. Other short positions (covered calls, spreads,
+      // naked) depend on how they are secured, so those stay manual.
+      return collateralRequired(t)
+    }
     const entry = num(t.entry_premium)
     if (entry === null) return null
     return round2(Math.abs(entry) * contracts * OPTION_MULTIPLIER)
@@ -344,4 +347,67 @@ export function monthlyRollup(trades) {
   return [...byMonth.values()]
     .map((m) => ({ ...m, winRate: m.wins + m.losses ? (m.wins / (m.wins + m.losses)) * 100 : null }))
     .sort((a, b) => a.month.localeCompare(b.month))
+}
+
+
+/**
+ * Cash tied up by a short put: the strike, times 100, times contracts. Returns
+ * null for anything that is not a cash-secured put, since collateral for other
+ * structures depends on how the position is secured.
+ */
+export function collateralRequired(t) {
+  const explicit = num(t.collateral)
+  if (explicit !== null) return explicit
+  if (t.asset_class !== 'options' || t.option_side !== 'sell' || t.option_type !== 'put') return null
+  const strike = num(t.strike)
+  const contracts = num(t.contracts)
+  if (strike === null || contracts === null) return null
+  return round2(strike * OPTION_MULTIPLIER * contracts)
+}
+
+/** Credit taken in at open, before any buy-back. */
+export function creditReceived(t) {
+  if (t.option_side !== 'sell') return null
+  const premium = num(t.entry_premium)
+  const contracts = num(t.contracts)
+  if (premium === null || contracts === null) return null
+  return round2(premium * OPTION_MULTIPLIER * contracts)
+}
+
+/** Percent return on the collateral posted. */
+export function returnOnCollateral(t) {
+  const collateral = collateralRequired(t)
+  const net = num(t.net_pnl)
+  if (collateral === null || net === null || collateral === 0) return null
+  return (net / collateral) * 100
+}
+
+/**
+ * Simple annualised return: the realised percentage scaled to a full year by
+ * days held. A 2% gain over 30 days annualises to roughly 24%.
+ *
+ * This is the standard way premium sellers compare trades of different
+ * durations. It is not compounded, and it assumes the capital could be
+ * redeployed at the same rate, which is a big assumption on a short sample.
+ */
+export function annualisedReturn(t, basePercent = null) {
+  const base = basePercent ?? returnOnCollateral(t)
+  const held = daysHeld(t)
+  if (base === null || held === null) return null
+  // Same-day closes would divide by zero, so floor the holding period at a day.
+  return base * (365 / Math.max(held, 1))
+}
+
+/**
+ * Share of the maximum possible profit captured. For a short option the most
+ * you can make is the credit, so closing a $6.40 credit at $1.15 banks 82%.
+ * This is the number to check against a 50-60% buy-back target.
+ */
+export function percentOfMaxProfit(t) {
+  if (t.option_side !== 'sell') return null
+  const entry = num(t.entry_premium)
+  const exit = num(t.exit_premium)
+  if (entry === null || entry === 0) return null
+  // An open position has captured nothing yet; treat a missing exit as zero.
+  return ((entry - (exit ?? 0)) / Math.abs(entry)) * 100
 }

@@ -169,6 +169,13 @@ const MIGRATIONS = [
     UNIQUE (entry_date, session)
   );
   `,
+
+  // 2 - cash-secured put tracking and a dedicated thesis field
+  `
+  ALTER TABLE trades ADD COLUMN close_method TEXT;
+  ALTER TABLE trades ADD COLUMN collateral   REAL;
+  ALTER TABLE trades ADD COLUMN thesis       TEXT;
+  `,
 ]
 
 function migrate() {

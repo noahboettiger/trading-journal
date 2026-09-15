@@ -9,13 +9,21 @@ you can back up or copy.
 
 ## Running it
 
+This runs on **your own computer**. There is no hosted version, so `localhost`
+only works once the server is running on the machine you are browsing from.
+
+You need [Node.js](https://nodejs.org) 22 or newer (`node --version` to check).
+
 ```bash
+git clone https://github.com/noahboettiger/trading-journal.git
+cd trading-journal
 npm install
 npm run build
 npm start
 ```
 
-Then open **http://localhost:4317**.
+Then open **http://localhost:4317**. Leave that terminal open; closing it stops
+the server. Start it again any time with `npm start` from the project folder.
 
 The server also prints a `network` address (something like `http://192.168.1.20:4317`).
 Open that on your phone while it is on the same wifi and you get the same journal,
@@ -70,14 +78,36 @@ planned R:R are computed from those, and every one of them can be overridden by 
 
 ### Options fields
 
-Ticker, call/put, buy/sell, strike, expiration, contracts, entry and exit premium.
-The app computes **days held**, **DTE at entry**, **DTE at exit** and **return on the
-premium at risk**. Delta, IV, theta and vega sit behind an optional toggle so the form
-stays short when you do not need them.
+Ticker, call/put, buy/sell, strike, expiration, contracts, entry and exit premium,
+and how the position closed (bought to close, expired worthless, assigned, rolled,
+sold to close). The app computes **days held**, **DTE at entry** and **DTE at exit**.
+Delta, IV, theta and vega sit behind an optional toggle so the form stays short.
 
 Risk for long premium defaults to the full debit paid, which is the real max loss.
-Short premium has no knowable max loss without knowing whether it is cash-secured,
-spread or naked, so that stays a manual entry.
+
+### Cash-secured puts
+
+Selling puts gets its own treatment, because R-multiples are the wrong lens for
+premium selling. Enter the credit and the strike, and the journal derives:
+
+| Figure | How it is calculated |
+| --- | --- |
+| Collateral | strike x 100 x contracts |
+| Credit taken in | premium x 100 x contracts |
+| Return on collateral | net P&L / collateral |
+| Annualised return | return on collateral x (365 / days held) |
+| Max profit captured | (credit - buy-back price) / credit |
+
+That last one is the number to check against a 50-60% buy-back target. Expiring
+worthless reads as 100%; a position that moved against you reads negative.
+
+The Analytics page has a **Premium selling** section rolling these up across every
+short put: total credit, average return on collateral, capital-weighted annualised
+return, average days held, average share of max profit captured, and a breakdown of
+how positions closed, so assignments are visible at a glance.
+
+Annualised return is simple, not compounded, and assumes the capital could be
+redeployed at the same rate. On a short sample it flatters fast winners.
 
 ### The rule checklist
 
@@ -102,8 +132,30 @@ Two playbooks ship by default:
 | Risk Management | Target meets minimum 1.5:1 risk to reward |
 | Risk Management | Stop loss placed at the swing low/high |
 
-**Options - Swing** ships a starter set covering thesis, structure and risk. Edit it
-in Settings to match how you actually trade.
+**Options - Swing**
+
+| Section | Rule |
+| --- | --- |
+| Setup Quality | A+ setup only |
+| Setup Quality | Catalyst or news checked before entry |
+| Risk Management | Not over-leveraged for this setup |
+| Risk Management | Comfortable losing the full premium |
+| Exit | Exit plan defined before entry |
+
+**Options - Cash-Secured Puts**
+
+| Section | Rule |
+| --- | --- |
+| Assignment | Genuinely happy to own the shares at this strike |
+| Assignment | Collateral actually available and set aside |
+| Setup Quality | A+ setup only |
+| Setup Quality | Earnings and catalysts checked through expiration |
+| Exit | Buy-back target set (50-60% of max profit) |
+| Risk Management | Not over-leveraged across all open short puts |
+
+Every one of these is editable in Settings, and you can add playbooks of your own.
+Switching the instrument type on the form moves the playbook with it, so a put never
+gets graded against the futures checklist.
 
 #### Editing rules never rewrites history
 
@@ -136,6 +188,32 @@ execution grade, emotional state, mistake tag and playbook.
 
 **Session journal** — day-level notes separate from individual trades, with an
 optional starter template.
+
+### Room to actually write
+
+Every trade carries four separate long-form fields rather than one notes box:
+
+- **Thesis** — why you took it, the read you were trading
+- **Notes** — what actually happened once you were in, and how you managed it
+- **Lesson learned** — the one thing to carry forward
+- **Reflections** — anything else
+
+Plus a note on any individual rule explaining why it was missed. All four are
+searchable from the trade log.
+
+### Breakeven win rates
+
+For reference, the win rate a given reward-to-risk needs just to break even is
+`1 / (1 + R)`:
+
+| Reward:Risk | Breakeven win rate |
+| --- | --- |
+| 1:1 | 50.0% |
+| 1.5:1 | 40.0% |
+| 2:1 | 33.3% |
+| 3:1 | 25.0% |
+
+Commissions push each of these slightly higher.
 
 ---
 

@@ -19,7 +19,8 @@ const post = async (path, body) => {
 
 const playbooks = await (await fetch(`${API}/playbooks`)).json()
 const futures = playbooks.find((p) => p.asset_class === 'futures')
-const options = playbooks.find((p) => p.asset_class === 'options')
+const options = playbooks.find((p) => p.name.includes('Swing'))
+const csp = playbooks.find((p) => p.name.includes('Cash-Secured')) ?? options
 const tags = await (await fetch(`${API}/tags?kind=mistake`)).json()
 const tagId = (name) => tags.find((t) => t.name === name)?.id
 
@@ -61,24 +62,56 @@ for (const [date, sym, dir, session, tf, setup, risk, pnl, grade, emotion, broke
   })
 }
 
-const OPTIONS = [
-  ['2026-08-05', '2026-08-21', 'NVDA', 'long', 'call', 'buy', 185, '2026-09-18', 4, 5.2, 8.95, 'Break and Retest', 'B', 'Calm', [], 'Swing long into the gap fill. Sold half at 2R, let the rest run.'],
-  ['2026-08-12', '2026-08-28', 'SPY', 'long', 'put', 'sell', 640, '2026-09-19', 2, 6.4, 1.15, 'Break and Retest', 'A', 'Calm', [], 'Cash secured put after the flush. Bought back at 80% of max profit.'],
-  ['2026-08-20', '2026-09-04', 'TSLA', 'short', 'put', 'buy', 400, '2026-09-18', 3, 9.1, 4.2, 'IFVG Reversal', 'C', 'Anxious', ['21+ days to expiration'], 'Bought too close to expiry, theta ate it while I waited.'],
-  ['2026-09-02', '2026-09-12', 'AAPL', 'long', 'call', 'buy', 250, '2026-10-16', 5, 3.4, 5.85, 'Judas Swing', 'B', 'Focused', [], 'Post-earnings continuation.'],
-  ['2026-09-08', null, 'QQQ', 'short', 'call', 'sell', 620, '2026-10-16', 3, 4.8, 2.1, 'Break and Retest', 'A', 'Calm', [], 'Covered calls against the core position.'],
+// Long premium swings.
+const SWINGS = [
+  ['2026-08-05', '2026-08-21', 'NVDA', 'long', 'call', 185, '2026-09-18', 4, 5.2, 8.95, 'Break and Retest', 'B', 'Calm', [],
+    'Reclaimed the prior range low and held it on the retest. Wanted the gap fill at 195 with a month of runway.',
+    'Sold half at 2R and let the rest run to the target. Managed it the way I planned it.'],
+  ['2026-08-20', '2026-09-04', 'TSLA', 'short', 'put', 400, '2026-09-18', 3, 9.1, 4.2, 'IFVG Reversal', 'C', 'Anxious', ['A+ setup only'],
+    'Bearish IFVG on the daily, wanted the move to 380.',
+    'Right on direction but bought too close to expiry. Theta ate most of it while I waited for the move.'],
+  ['2026-09-02', '2026-09-12', 'AAPL', 'long', 'call', 250, '2026-10-16', 5, 3.4, 5.85, 'Judas Swing', 'B', 'Focused', [],
+    'Post-earnings continuation with the gap holding as support.',
+    'Clean, took it at target.'],
 ]
 
-for (const [date, exitDate, sym, dir, type, side, strike, exp, qty, entryP, exitP, setup, grade, emotion, broken, notes] of OPTIONS) {
+for (const [date, exitDate, sym, dir, type, strike, exp, qty, entryP, exitP, setup, grade, emotion, broken, thesis, notes] of SWINGS) {
   await post('/trades', {
     asset_class: 'options', trade_style: 'Swing Trade', symbol: sym, direction: dir,
-    option_type: type, option_side: side, strike, expiration: exp,
-    trade_date: date, exit_date: exitDate, setup, trade_source: 'Personal',
+    option_type: type, option_side: 'buy', strike, expiration: exp,
+    trade_date: date, exit_date: exitDate, close_method: 'sold_to_close',
+    setup, trade_source: 'Personal',
     contracts: qty, entry_premium: entryP, exit_premium: exitP, commissions: qty * 1.3,
-    ...(side === 'sell' ? { risk_amount: strike * qty * 100 * 0.2 } : {}),
-    execution_grade: grade, emotional_state: emotion, playbook_id: options.id, notes,
-    rule_checks: checksFor(options, broken),
-    tag_ids: [],
+    execution_grade: grade, emotional_state: emotion, playbook_id: options.id, thesis, notes,
+    rule_checks: checksFor(options, broken), tag_ids: [],
+  })
+}
+
+// Cash-secured puts. Collateral and every return figure derive from the strike.
+const PUTS = [
+  ['2026-08-12', '2026-08-28', 'SPY', 640, '2026-09-19', 2, 6.4, 1.15, 'bought_to_close', 'A', [],
+    'Happy to own SPY at 640 after the flush. Selling into elevated IV.',
+    'Bought back at 82% of max profit, past my 50-60% target but it got there fast.'],
+  ['2026-08-25', '2026-09-10', 'AMD', 160, '2026-10-16', 3, 4.25, 1.70, 'bought_to_close', 'A', [],
+    'Would take AMD at 160. No earnings before expiration.',
+    'Closed at 60% of max profit, right on target.'],
+  ['2026-09-01', '2026-09-14', 'GOOGL', 210, '2026-10-02', 2, 3.10, 0, 'expired', 'B', [],
+    'Comfortable owning GOOGL at 210 into the quarter.',
+    'Let it expire worthless. Kept the whole credit.'],
+  ['2026-09-04', '2026-09-15', 'NVDA', 170, '2026-10-16', 2, 6.80, 9.40, 'assigned', 'C', ['Earnings and catalysts'],
+    'Wanted NVDA at 170. Did not check that guidance was mid-cycle.',
+    'Got assigned when it broke down through the strike. Own the shares now, but the put lost on the way.'],
+]
+
+for (const [date, exitDate, sym, strike, exp, qty, entryP, exitP, closeMethod, grade, broken, thesis, notes] of PUTS) {
+  await post('/trades', {
+    asset_class: 'options', trade_style: 'Swing Trade', symbol: sym, direction: 'long',
+    option_type: 'put', option_side: 'sell', strike, expiration: exp,
+    trade_date: date, exit_date: exitDate, close_method: closeMethod,
+    setup: 'Break and Retest', trade_source: 'Personal',
+    contracts: qty, entry_premium: entryP, exit_premium: exitP, commissions: qty * 1.3,
+    execution_grade: grade, emotional_state: 'Calm', playbook_id: csp.id, thesis, notes,
+    rule_checks: checksFor(csp, broken), tag_ids: [],
   })
 }
 

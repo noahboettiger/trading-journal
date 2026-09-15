@@ -28,11 +28,16 @@ export function CardHeader({ title, icon, right, subtitle }: { title: ReactNode;
 
 export function Field({ label, hint, children, className = '' }: { label: ReactNode; hint?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <label className={`block ${className}`}>
-      <span className="label block mb-1.5">{label}</span>
-      {children}
+    // The hint sits outside the <label> on purpose: inside it, it becomes part
+    // of the input's accessible name, so a screen reader would announce
+    // "Collateral Strike x 100 x contracts" instead of just "Collateral".
+    <div className={className}>
+      <label className="block">
+        <span className="label mb-1.5 block">{label}</span>
+        {children}
+      </label>
       {hint && <span className="mt-1 block text-[11px] text-ink-faint">{hint}</span>}
-    </label>
+    </div>
   )
 }
 

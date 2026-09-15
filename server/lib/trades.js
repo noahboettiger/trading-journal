@@ -2,6 +2,7 @@ import { db } from './db.js'
 import {
   deriveNetPnl, deriveGrossPnl, deriveRiskAmount, resultR, deriveOutcome, plannedRR,
   daysHeld, dteAtEntry, dteAtExit, returnOnRisk, num,
+  collateralRequired, creditReceived, returnOnCollateral, annualisedReturn, percentOfMaxProfit,
 } from '../../shared/calc.js'
 
 /** Columns a client is allowed to write. Anything else in a payload is ignored. */
@@ -10,17 +11,18 @@ export const TRADE_COLUMNS = [
   'trade_date', 'exit_date', 'entry_time', 'exit_time', 'session', 'timeframe', 'setup', 'trade_source',
   'contracts', 'entry_price', 'exit_price', 'stop_price', 'target_price', 'point_value',
   'option_type', 'option_side', 'strike', 'expiration', 'entry_premium', 'exit_premium',
+  'close_method', 'collateral',
   'underlying_entry', 'underlying_stop', 'underlying_target', 'dte_at_entry',
   'delta', 'theta', 'vega', 'iv_at_entry',
   'risk_amount', 'planned_rr', 'gross_pnl', 'commissions', 'net_pnl', 'result_r_override',
-  'execution_grade', 'emotional_state', 'notes', 'lesson_learned', 'reflections',
+  'execution_grade', 'emotional_state', 'thesis', 'notes', 'lesson_learned', 'reflections',
 ]
 
 const NUMERIC_COLUMNS = new Set([
   'playbook_id', 'contracts', 'entry_price', 'exit_price', 'stop_price',
   'target_price', 'point_value', 'strike', 'entry_premium', 'exit_premium',
   'underlying_entry', 'underlying_stop', 'underlying_target', 'dte_at_entry',
-  'delta', 'theta', 'vega', 'iv_at_entry', 'risk_amount', 'planned_rr', 'gross_pnl',
+  'delta', 'theta', 'vega', 'iv_at_entry', 'collateral', 'risk_amount', 'planned_rr', 'gross_pnl',
   'commissions', 'net_pnl', 'result_r_override',
 ])
 
@@ -41,7 +43,7 @@ function normalise(body) {
   return row
 }
 
-const DERIVED_COLUMNS = ['gross_pnl', 'net_pnl', 'planned_rr', 'risk_amount', 'outcome', 'commissions']
+const DERIVED_COLUMNS = ['gross_pnl', 'net_pnl', 'planned_rr', 'risk_amount', 'collateral', 'outcome', 'commissions']
 
 /**
  * Fill in money fields the client did not send explicitly.
@@ -67,6 +69,10 @@ function applyDerivations(row, provided = new Set()) {
     const v = plannedRR(row)
     if (v !== null) row.planned_rr = v
   }
+  if (!provided.has('collateral')) {
+    const v = collateralRequired({ ...row, collateral: null })
+    if (v !== null) row.collateral = v
+  }
   if (!provided.has('risk_amount')) {
     const v = deriveRiskAmount(row)
     if (v !== null) row.risk_amount = v
@@ -91,6 +97,11 @@ export function enrich(trade, { withChildren = true } = {}) {
     dte_entry: dteAtEntry(trade),
     dte_exit: dteAtExit(trade),
     return_on_risk: returnOnRisk(trade),
+    collateral_required: collateralRequired(trade),
+    credit_received: creditReceived(trade),
+    return_on_collateral: returnOnCollateral(trade),
+    annualised_return: annualisedReturn(trade),
+    pct_of_max_profit: percentOfMaxProfit(trade),
   }
   if (withChildren) {
     out.rule_checks = db
@@ -229,6 +240,8 @@ export function listTrades(q = {}) {
   eq('asset_class', q.asset_class)
   eq('trade_style', q.trade_style)
   eq('option_side', q.option_side)
+  eq('option_type', q.option_type)
+  eq('close_method', q.close_method)
   eq('outcome', q.outcome)
   eq('direction', q.direction)
   eq('session', q.session)
@@ -248,9 +261,11 @@ export function listTrades(q = {}) {
     params.push(q.to)
   }
   if (q.search) {
-    where.push('(notes LIKE ? OR lesson_learned LIKE ? OR reflections LIKE ? OR setup LIKE ? OR symbol LIKE ?)')
+    where.push(
+      '(notes LIKE ? OR thesis LIKE ? OR lesson_learned LIKE ? OR reflections LIKE ? OR setup LIKE ? OR symbol LIKE ?)',
+    )
     const like = `%${q.search}%`
-    params.push(like, like, like, like, like)
+    params.push(like, like, like, like, like, like)
   }
 
   const sql = `SELECT * FROM trades ${where.length ? `WHERE ${where.join(' AND ')}` : ''}

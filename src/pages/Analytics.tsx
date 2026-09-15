@@ -2,6 +2,8 @@ import { useMemo } from 'react'
 import { api } from '@/lib/api'
 import { useAsync, useStored } from '@/lib/hooks'
 import { money, pct, rMultiple, ratio, pnlClass, compactMoney } from '@/lib/format'
+import type { Trade } from '@/lib/types'
+import { CLOSE_METHOD_LABELS } from '@/lib/instruments'
 import type { Bucket, Stats } from '@/lib/types'
 import { PageHeader } from '@/components/Layout'
 import { Card, CardHeader, Spinner, ErrorNote, Segmented, EmptyState } from '@/components/ui'
@@ -69,10 +71,84 @@ function BreakdownTable({ title, subtitle, rows, keyField }: {
   )
 }
 
+/**
+ * Premium selling is judged differently from directional trades: what matters is
+ * the return on the collateral you tied up and how fast you got it, not R.
+ */
+function PremiumSelling({ trades }: { trades: Trade[] }) {
+  const closed = trades.filter((t) => t.net_pnl !== null)
+  const totalPnl = closed.reduce((a, t) => a + (t.net_pnl ?? 0), 0)
+  const totalCredit = closed.reduce((a, t) => a + (t.credit_received ?? 0), 0)
+  const withCollateral = closed.filter((t) => t.collateral_required)
+  const avgReturn = withCollateral.length
+    ? withCollateral.reduce((a, t) => a + (t.return_on_collateral ?? 0), 0) / withCollateral.length
+    : null
+  // Capital-weighted, so a big position counts for more than a small one.
+  const weightedAnnualised = (() => {
+    const capital = withCollateral.reduce((a, t) => a + (t.collateral_required ?? 0), 0)
+    if (!capital) return null
+    return withCollateral.reduce((a, t) => a + (t.annualised_return ?? 0) * (t.collateral_required ?? 0), 0) / capital
+  })()
+  const avgHeld = closed.length
+    ? closed.reduce((a, t) => a + (t.days_held ?? 0), 0) / closed.length
+    : null
+  const avgCaptured = closed.filter((t) => t.pct_of_max_profit !== null).length
+    ? closed.reduce((a, t) => a + (t.pct_of_max_profit ?? 0), 0) /
+      closed.filter((t) => t.pct_of_max_profit !== null).length
+    : null
+
+  const byClose = new Map<string, { n: number; pnl: number }>()
+  for (const t of closed) {
+    const k = t.close_method ? (CLOSE_METHOD_LABELS[t.close_method] ?? t.close_method) : 'Not recorded'
+    const cur = byClose.get(k) ?? { n: 0, pnl: 0 }
+    byClose.set(k, { n: cur.n + 1, pnl: cur.pnl + (t.net_pnl ?? 0) })
+  }
+
+  return (
+    <Card>
+      <CardHeader
+        title="Premium selling"
+        subtitle={`${closed.length} closed position${closed.length === 1 ? '' : 's'} - judged on return to collateral, not R`}
+      />
+      <div className="grid grid-cols-2 gap-3 p-4 lg:grid-cols-6">
+        {[
+          ['Net P&L', money(totalPnl, { sign: true }), pnlClass(totalPnl)],
+          ['Credit taken in', money(totalCredit, { cents: false }), ''],
+          ['Avg return on collateral', pct(avgReturn, 2), pnlClass(avgReturn)],
+          ['Annualised (capital weighted)', pct(weightedAnnualised, 1), pnlClass(weightedAnnualised)],
+          ['Avg days held', avgHeld === null ? '--' : `${avgHeld.toFixed(0)}d`, ''],
+          ['Avg max profit captured', pct(avgCaptured, 0), avgCaptured !== null && avgCaptured >= 50 ? 'text-win' : ''],
+        ].map(([label, value, cls]) => (
+          <div key={label as string} className="rounded-lg border border-line bg-surface-2/50 px-3 py-2.5">
+            <div className="label leading-tight">{label}</div>
+            <div className={`mt-1 text-base font-semibold tnum ${cls}`}>{value}</div>
+          </div>
+        ))}
+      </div>
+      <div className="border-t border-line px-4 py-3">
+        <div className="label mb-2">How positions closed</div>
+        <div className="flex flex-wrap gap-2">
+          {[...byClose.entries()].map(([k, v]) => (
+            <span key={k} className="chip">
+              {k}
+              <span className="tnum text-ink-faint">{v.n}</span>
+              <span className={`tnum font-semibold ${pnlClass(v.pnl)}`}>{money(v.pnl, { sign: true })}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+    </Card>
+  )
+}
+
 export default function Analytics() {
   const [range, setRange] = useStored('tj-analytics-range', 'all')
   const query = useMemo(() => ({ from: rangeStart(range) }), [range])
   const { data: stats, loading, error } = useAsync<Stats>(() => api.stats(query), [JSON.stringify(query)])
+  const { data: sells } = useAsync<Trade[]>(
+    () => api.trades.list({ ...query, asset_class: 'options', option_side: 'sell' }),
+    [JSON.stringify(query)],
+  )
 
   if (loading) return <Spinner label="Loading analytics" />
   if (error) return <div className="p-6"><ErrorNote error={error} /></div>
@@ -113,6 +189,8 @@ export default function Analytics() {
             </div>
           ))}
         </div>
+
+        {!!sells?.length && <PremiumSelling trades={sells} />}
 
         <div className="grid gap-5 xl:grid-cols-2">
           <BreakdownTable title="By trade type" subtitle="Your playbook setups, ranked" rows={stats.bySetup} keyField="setup" />

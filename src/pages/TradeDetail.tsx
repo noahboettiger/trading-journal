@@ -7,6 +7,7 @@ import {
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/hooks'
 import { money, rMultiple, pct, formatDay, pnlClass, ratio, num } from '@/lib/format'
+import { CLOSE_METHOD_LABELS } from '@/lib/instruments'
 import type { Trade } from '@/lib/types'
 import { PageHeader } from '@/components/Layout'
 import { Card, CardHeader, Badge, Spinner, ErrorNote, EmptyState } from '@/components/ui'
@@ -43,9 +44,28 @@ export default function TradeDetail() {
   if (!trade) return <EmptyState title="Trade not found" action={<Link className="btn-ghost" to="/trades">Back to trades</Link>} />
 
   const isOptions = trade.asset_class === 'options'
+  const isSelling = isOptions && trade.option_side === 'sell'
   const dateLabel = formatDay(trade.trade_date)
 
-  const summary = [
+  const summary = isSelling
+    ? [
+        { label: 'Credit taken in', value: money(trade.credit_received), icon: <DollarSign size={15} />, cls: '' },
+        { label: 'Collateral', value: money(trade.collateral_required, { cents: false }), icon: <Compass size={15} />, cls: '' },
+        { label: 'Net P&L', value: money(trade.net_pnl, { sign: true }), icon: <TrendingUp size={15} />, cls: pnlClass(trade.net_pnl) },
+        {
+          label: 'Return on collateral',
+          value: pct(trade.return_on_collateral, 2),
+          icon: <Target size={15} />,
+          cls: pnlClass(trade.return_on_collateral),
+        },
+        {
+          label: 'Annualised',
+          value: pct(trade.annualised_return, 1),
+          icon: <Award size={15} />,
+          cls: pnlClass(trade.annualised_return),
+        },
+      ]
+    : [
     { label: 'Direction', value: trade.direction === 'short' ? 'Short' : 'Long', icon: <Compass size={15} />, cls: '' },
     {
       label: 'Risk / Reward',
@@ -138,7 +158,33 @@ export default function TradeDetail() {
                   <FieldRow label="Exit premium" value={trade.exit_premium === null ? '--' : `$${num(trade.exit_premium)}`} />
                   <FieldRow label="DTE at entry" value={trade.dte_entry === null ? '--' : `${trade.dte_entry}d`} />
                   <FieldRow label="DTE at exit" value={trade.dte_exit === null ? '--' : `${trade.dte_exit}d`} />
-                  <FieldRow label="Return on risk" value={pct(trade.return_on_risk)} />
+                  {trade.close_method && (
+                    <FieldRow label="How it closed" value={CLOSE_METHOD_LABELS[trade.close_method] ?? trade.close_method} />
+                  )}
+                  {isSelling ? (
+                    <>
+                      <FieldRow label="Credit taken in" value={money(trade.credit_received)} />
+                      <FieldRow label="Collateral" value={money(trade.collateral_required, { cents: false })} />
+                      <FieldRow
+                        label="Return on collateral"
+                        value={<span className={pnlClass(trade.return_on_collateral)}>{pct(trade.return_on_collateral, 2)}</span>}
+                      />
+                      <FieldRow
+                        label="Annualised return"
+                        value={<span className={pnlClass(trade.annualised_return)}>{pct(trade.annualised_return, 1)}</span>}
+                      />
+                      <FieldRow
+                        label="Max profit captured"
+                        value={
+                          <span className={trade.pct_of_max_profit !== null && trade.pct_of_max_profit >= 50 ? 'text-win' : ''}>
+                            {pct(trade.pct_of_max_profit, 0)}
+                          </span>
+                        }
+                      />
+                    </>
+                  ) : (
+                    <FieldRow label="Return on risk" value={pct(trade.return_on_risk)} />
+                  )}
                   {trade.delta !== null && <FieldRow label="Delta" value={num(trade.delta)} />}
                   {trade.iv_at_entry !== null && <FieldRow label="IV at entry" value={pct(trade.iv_at_entry)} />}
                   {trade.underlying_entry !== null && <FieldRow label="Underlying entry" value={num(trade.underlying_entry)} />}
@@ -177,6 +223,9 @@ export default function TradeDetail() {
         {/* Review content */}
         <Card>
           <CardHeader title="Review" />
+          <div className="border-b border-line p-5">
+            <ReviewBlock label="Thesis - why I took it">{trade.thesis || 'No thesis recorded.'}</ReviewBlock>
+          </div>
           <div className="grid gap-6 p-5 lg:grid-cols-3">
             <ReviewBlock label="Emotional state">{trade.emotional_state || 'Not recorded.'}</ReviewBlock>
             <ReviewBlock label="Mistake tags">
@@ -190,7 +239,7 @@ export default function TradeDetail() {
                 'No mistakes tagged.'
               )}
             </ReviewBlock>
-            <ReviewBlock label="Notes">{trade.notes || 'No notes saved.'}</ReviewBlock>
+            <ReviewBlock label="Notes - what happened">{trade.notes || 'No notes saved.'}</ReviewBlock>
             <ReviewBlock label="Lesson learned">{trade.lesson_learned || 'No lesson saved.'}</ReviewBlock>
             <ReviewBlock label="Reflections">{trade.reflections || 'No reflections saved.'}</ReviewBlock>
           </div>

@@ -5,7 +5,9 @@ import { Save, Trash2, ChevronDown, Calculator } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAsync, useReference } from '@/lib/hooks'
 import { money, rMultiple, pct, todayISO, pnlClass, ratio } from '@/lib/format'
-import { pointValueFor, GRADES, ASSET_CLASSES, DIRECTIONS, OPTION_SIDES, STATUSES } from '@/lib/instruments'
+import {
+  pointValueFor, GRADES, ASSET_CLASSES, DIRECTIONS, OPTION_SIDES, STATUSES, CLOSE_METHODS,
+} from '@/lib/instruments'
 import type { RuleCheck, Trade, TradeImage } from '@/lib/types'
 import { PageHeader } from '@/components/Layout'
 import { Card, CardHeader, Field, Input, Select, Textarea, Badge, Spinner, ErrorNote } from '@/components/ui'
@@ -14,6 +16,7 @@ import { ChartUpload } from '@/components/ChartUpload'
 import {
   deriveGrossPnl, deriveNetPnl, deriveRiskAmount, plannedRR, resultR,
   daysHeld, dteAtEntry, dteAtExit, returnOnRisk,
+  collateralRequired, creditReceived, returnOnCollateral, annualisedReturn, percentOfMaxProfit,
 } from '@shared/calc.js'
 
 type FormState = Record<string, any>
@@ -44,7 +47,7 @@ function numeric(form: FormState) {
   for (const k of [
     'contracts', 'entry_price', 'exit_price', 'stop_price', 'target_price', 'point_value',
     'strike', 'entry_premium', 'exit_premium', 'underlying_entry', 'underlying_stop',
-    'underlying_target', 'delta', 'theta', 'vega', 'iv_at_entry', 'risk_amount',
+    'underlying_target', 'delta', 'theta', 'vega', 'iv_at_entry', 'collateral', 'risk_amount',
     'gross_pnl', 'net_pnl', 'commissions', 'result_r_override',
   ]) {
     out[k] = n(form[k])
@@ -87,6 +90,8 @@ export default function TradeForm() {
   const set = (patch: FormState) => setForm((f) => ({ ...f, ...patch }))
 
   const isOptions = form.asset_class === 'options'
+  const isSelling = isOptions && form.option_side === 'sell'
+  const isCsp = isSelling && form.option_type === 'put'
   const calc = useMemo(() => numeric(form), [form])
 
   // Live preview. Typed values win; blanks fall back to the derivation.
@@ -99,6 +104,12 @@ export default function TradeForm() {
   const dteIn = dteAtEntry(form)
   const dteOut = dteAtExit(form)
   const ror = returnOnRisk({ ...calc, net_pnl: netPreview, risk_amount: riskPreview })
+  const collateralPreview = n(form.collateral) ?? collateralRequired({ ...calc, collateral: null })
+  const creditPreview = creditReceived(calc)
+  const sellCalc = { ...calc, net_pnl: netPreview, collateral: collateralPreview }
+  const collateralReturn = returnOnCollateral(sellCalc)
+  const annualised = annualisedReturn(sellCalc)
+  const maxProfitPct = percentOfMaxProfit(calc)
 
   /**
    * Attach the selected playbook's rules, snapshotting their text. Checks
@@ -122,6 +133,24 @@ export default function TradeForm() {
         sort_order: i,
       }))
     set({ playbook_id: playbookId, rule_checks: checks })
+  }
+
+  /**
+   * Switching instrument type has to move the playbook with it. Otherwise a
+   * cash-secured put ends up graded against the futures ICT checklist, which
+   * is both wrong and quietly wrong. A playbook already matching the new
+   * instrument type is left alone, since that was a deliberate choice.
+   */
+  const switchAssetClass = (assetClass: string) => {
+    set({
+      asset_class: assetClass,
+      // Options here are swings; futures are day trades. Still editable.
+      trade_style: assetClass === 'options' ? 'Swing Trade' : 'Day Trade',
+    })
+    const current = reference.playbooks.find((p) => String(p.id) === String(form.playbook_id))
+    if (current?.asset_class === assetClass) return
+    const match = reference.playbooks.find((p) => p.asset_class === assetClass)
+    if (match) applyPlaybook(String(match.id))
   }
 
   // Default a new trade to the first playbook matching the instrument type.
@@ -194,18 +223,32 @@ export default function TradeForm() {
 
         {/* Live math strip */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {[
-            { label: 'Net P&L', value: netPreview === null ? '--' : money(netPreview, { sign: true }), cls: pnlClass(netPreview) },
-            { label: 'Result', value: rPreview === null ? '--' : rMultiple(rPreview), cls: pnlClass(rPreview) },
-            { label: 'Risk', value: riskPreview === null ? '--' : money(riskPreview), cls: 'text-ink' },
-            { label: 'Planned R:R', value: rrPreview === null ? '--' : `${ratio(rrPreview)}:1`, cls: 'text-ink' },
-            isOptions
-              ? { label: 'Return on risk', value: ror === null ? '--' : pct(ror), cls: pnlClass(ror) }
-              : { label: 'Gross P&L', value: grossPreview === null ? '--' : money(grossPreview, { sign: true }), cls: pnlClass(grossPreview) },
-            isOptions
-              ? { label: 'DTE in → out', value: dteIn === null ? '--' : `${dteIn} → ${dteOut ?? '--'}`, cls: 'text-ink' }
-              : { label: 'Days held', value: held === null ? '--' : `${held}d`, cls: 'text-ink' },
-          ].map((s) => (
+          {(isSelling
+            ? [
+                { label: 'Net P&L', value: netPreview === null ? '--' : money(netPreview, { sign: true }), cls: pnlClass(netPreview) },
+                { label: 'Credit taken in', value: creditPreview === null ? '--' : money(creditPreview), cls: 'text-ink' },
+                { label: 'Collateral', value: collateralPreview === null ? '--' : money(collateralPreview, { cents: false }), cls: 'text-ink' },
+                { label: 'Return on collateral', value: collateralReturn === null ? '--' : pct(collateralReturn, 2), cls: pnlClass(collateralReturn) },
+                { label: 'Annualised', value: annualised === null ? '--' : pct(annualised, 1), cls: pnlClass(annualised) },
+                {
+                  label: '% of max profit',
+                  value: maxProfitPct === null ? '--' : pct(maxProfitPct, 0),
+                  cls: maxProfitPct !== null && maxProfitPct >= 50 ? 'text-win' : 'text-ink',
+                },
+              ]
+            : [
+                { label: 'Net P&L', value: netPreview === null ? '--' : money(netPreview, { sign: true }), cls: pnlClass(netPreview) },
+                { label: 'Result', value: rPreview === null ? '--' : rMultiple(rPreview), cls: pnlClass(rPreview) },
+                { label: 'Risk', value: riskPreview === null ? '--' : money(riskPreview), cls: 'text-ink' },
+                { label: 'Planned R:R', value: rrPreview === null ? '--' : `${ratio(rrPreview)}:1`, cls: 'text-ink' },
+                isOptions
+                  ? { label: 'Return on risk', value: ror === null ? '--' : pct(ror), cls: pnlClass(ror) }
+                  : { label: 'Gross P&L', value: grossPreview === null ? '--' : money(grossPreview, { sign: true }), cls: pnlClass(grossPreview) },
+                isOptions
+                  ? { label: 'DTE in → out', value: dteIn === null ? '--' : `${dteIn} → ${dteOut ?? '--'}`, cls: 'text-ink' }
+                  : { label: 'Days held', value: held === null ? '--' : `${held}d`, cls: 'text-ink' },
+              ]
+          ).map((s) => (
             <div key={s.label} className="card px-3.5 py-2.5">
               <div className="label">{s.label}</div>
               <div className={`mt-1 text-lg font-semibold tnum ${s.cls}`}>{s.value}</div>
@@ -223,7 +266,7 @@ export default function TradeForm() {
                   <Select
                     value={form.asset_class}
                     options={ASSET_CLASSES}
-                    onChange={(e) => set({ asset_class: e.target.value })}
+                    onChange={(e) => switchAssetClass(e.target.value)}
                   />
                 </Field>
                 <Field label="Trade style">
@@ -337,6 +380,28 @@ export default function TradeForm() {
                     <Field label="Commissions">
                       <Input type="number" step="any" value={form.commissions ?? ''} onChange={(e) => set({ commissions: e.target.value })} />
                     </Field>
+                    <Field label="How it closed">
+                      <Select
+                        value={form.close_method ?? ''}
+                        options={CLOSE_METHODS}
+                        placeholder="Still open"
+                        onChange={(e) => set({ close_method: e.target.value })}
+                      />
+                    </Field>
+                    {isCsp && (
+                      <Field
+                        label="Collateral"
+                        hint={collateralPreview !== null && !form.collateral ? `Auto: ${money(collateralPreview, { cents: false })}` : 'Strike x 100 x contracts'}
+                      >
+                        <Input
+                          type="number"
+                          step="any"
+                          placeholder={collateralPreview !== null ? String(collateralPreview) : ''}
+                          value={form.collateral ?? ''}
+                          onChange={(e) => set({ collateral: e.target.value })}
+                        />
+                      </Field>
+                    )}
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-3">
@@ -454,15 +519,28 @@ export default function TradeForm() {
                     </div>
                   </Field>
                 </div>
-                <Field label="Notes" hint="What you saw and why you took it">
-                  <Textarea rows={4} value={form.notes ?? ''} onChange={(e) => set({ notes: e.target.value })} />
+                <Field label="Thesis" hint="Why you took it, written before or at entry">
+                  <Textarea
+                    rows={5}
+                    value={form.thesis ?? ''}
+                    onChange={(e) => set({ thesis: e.target.value })}
+                    placeholder="What you saw, the draw you were trading toward, why this was the setup and not the next one."
+                  />
+                </Field>
+                <Field label="Notes" hint="What actually happened once you were in">
+                  <Textarea
+                    rows={6}
+                    value={form.notes ?? ''}
+                    onChange={(e) => set({ notes: e.target.value })}
+                    placeholder="How it played out, how you managed it, what you were thinking at each decision."
+                  />
                 </Field>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Lesson learned">
-                    <Textarea rows={3} value={form.lesson_learned ?? ''} onChange={(e) => set({ lesson_learned: e.target.value })} />
+                  <Field label="Lesson learned" hint="The one thing to carry forward">
+                    <Textarea rows={5} value={form.lesson_learned ?? ''} onChange={(e) => set({ lesson_learned: e.target.value })} />
                   </Field>
-                  <Field label="Reflections">
-                    <Textarea rows={3} value={form.reflections ?? ''} onChange={(e) => set({ reflections: e.target.value })} />
+                  <Field label="Reflections" hint="Anything else worth saying">
+                    <Textarea rows={5} value={form.reflections ?? ''} onChange={(e) => set({ reflections: e.target.value })} />
                   </Field>
                 </div>
               </div>

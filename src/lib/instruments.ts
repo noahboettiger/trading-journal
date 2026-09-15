@@ -41,3 +41,15 @@ export const STATUSES = [
   { value: 'open', label: 'Open' },
   { value: 'planned', label: 'Planned' },
 ]
+
+export const CLOSE_METHODS = [
+  { value: 'bought_to_close', label: 'Bought to close' },
+  { value: 'expired', label: 'Expired worthless' },
+  { value: 'assigned', label: 'Assigned' },
+  { value: 'rolled', label: 'Rolled' },
+  { value: 'sold_to_close', label: 'Sold to close' },
+]
+
+export const CLOSE_METHOD_LABELS: Record<string, string> = Object.fromEntries(
+  CLOSE_METHODS.map((m) => [m.value, m.label]),
+)

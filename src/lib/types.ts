@@ -82,6 +82,8 @@ export interface Trade {
 
   option_type: 'call' | 'put' | null
   option_side: 'buy' | 'sell' | null
+  close_method: string | null
+  collateral: number | null
   strike: number | null
   expiration: string | null
   entry_premium: number | null
@@ -107,9 +109,15 @@ export interface Trade {
   dte_entry: number | null
   dte_exit: number | null
   return_on_risk: number | null
+  collateral_required: number | null
+  credit_received: number | null
+  return_on_collateral: number | null
+  annualised_return: number | null
+  pct_of_max_profit: number | null
 
   execution_grade: string | null
   emotional_state: string | null
+  thesis: string | null
   notes: string | null
   lesson_learned: string | null
   reflections: string | null

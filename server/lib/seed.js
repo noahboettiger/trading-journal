@@ -20,18 +20,20 @@ const FUTURES_RULES = [
 ]
 
 const OPTIONS_RULES = [
-  ['Thesis', 'Directional thesis written down before entry', 'Starter rule - edit in Settings to match your swing model.', 0],
-  ['Thesis', 'Defined invalidation level on the underlying', 'You know the price that kills the idea.', 1],
-  ['Thesis', 'Catalyst or timing window identified', 'Why now, and not three weeks from now.', 0],
+  ['Setup Quality', 'A+ setup only', 'If it is not A+, it is not a trade. Everything else is a pass.', 1],
+  ['Setup Quality', 'Catalyst or news checked before entry', 'You know what is scheduled between now and your exit.', 0],
+  ['Risk Management', 'Not over-leveraged for this setup', 'Size reflects conviction and what is going on around it, not the maximum the account allows.', 1],
+  ['Risk Management', 'Comfortable losing the full premium', 'For long premium, a total loss would not change how you trade tomorrow.', 1],
+  ['Exit', 'Exit plan defined before entry', 'You know what takes you out, in profit and in loss.', 0],
+]
 
-  ['Structure', '21+ days to expiration at entry', 'Keeps you off the theta cliff unless the trade is explicitly a short-dated play.', 0],
-  ['Structure', 'Not holding through earnings unless that is the thesis', 'Avoids unintended IV crush exposure.', 0],
-  ['Structure', 'Implied volatility checked before paying up', 'Not buying premium into an IV spike by accident.', 0],
-
-  ['Risk Management', 'Position sized off premium at risk, not contract count', 'Max loss in dollars is known at entry.', 1],
-  ['Risk Management', 'Max loss acceptable if it goes to zero', 'For long premium, you are fine losing the whole debit.', 1],
-  ['Risk Management', 'Exit plan defined before entry (target and time stop)', 'Both a price target and a date you will exit regardless.', 1],
-  ['Risk Management', 'If selling premium: assignment outcome is acceptable', 'You would be content owning or delivering the shares at the strike.', 0],
+const CSP_RULES = [
+  ['Assignment', 'Genuinely happy to own the shares at this strike', 'The whole trade rests on this. If assignment would be a problem, the strike is wrong.', 1],
+  ['Assignment', 'Collateral actually available and set aside', 'Strike x 100 x contracts is really sitting there, uncommitted.', 1],
+  ['Setup Quality', 'A+ setup only', 'Same bar as the swing book. Premium alone is not a reason.', 1],
+  ['Setup Quality', 'Earnings and catalysts checked through expiration', 'You know what is scheduled before this expires.', 0],
+  ['Exit', 'Buy-back target set (50-60% of max profit)', 'The level where you take it off rather than holding for the last few cents.', 0],
+  ['Risk Management', 'Not over-leveraged across all open short puts', 'Total collateral committed across every open put is still comfortable.', 1],
 ]
 
 /** Editable dropdown lists. Add to any of these from Settings. */
@@ -80,12 +82,24 @@ export function seedIfEmpty() {
       insertPlaybook.run(
         'Options - Swing',
         'options',
-        'Starter rule set for swing and premium-selling options. Edit these in Settings to match your real model.',
+        'A+ setups only, sized for the setup and whatever catalysts are in the way.',
         1,
       ).lastInsertRowid,
     )
     OPTIONS_RULES.forEach(([section, text, detail, critical], i) =>
       insertRule.run(optionsId, section, text, detail, critical, i),
+    )
+
+    const cspId = Number(
+      insertPlaybook.run(
+        'Options - Cash-Secured Puts',
+        'options',
+        'Selling puts at strikes you would be content owning, targeting a 50-60% buy-back.',
+        2,
+      ).lastInsertRowid,
+    )
+    CSP_RULES.forEach(([section, text, detail, critical], i) =>
+      insertRule.run(cspId, section, text, detail, critical, i),
     )
 
     console.log('[seed] created default playbooks and rules')
