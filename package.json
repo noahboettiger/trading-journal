@@ -5,14 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -n api,web -c cyan,magenta \"npm:dev:api\" \"npm:dev:web\"",
-    "dev:api": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env --watch server/index.js",
+    "dev:api": "node --disable-warning=ExperimentalWarning --watch server/index.js",
     "dev:web": "vite",
     "build": "vite build",
-    "start": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env server/index.js",
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
     "typecheck": "tsc --noEmit",
     "seed:demo": "node scripts/seed-demo.mjs",
     "reset:trades": "node scripts/reset-trades.mjs",
-    "backup": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env scripts/backup.mjs"
+    "backup": "node --disable-warning=ExperimentalWarning scripts/backup.mjs"
   },
   "dependencies": {
     "date-fns": "^4.1.0",

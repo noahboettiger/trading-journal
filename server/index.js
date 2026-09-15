@@ -1,3 +1,4 @@
+import './lib/env.js' // must come first: later imports read process.env at load
 import express from 'express'
 import path from 'node:path'
 import fs from 'node:fs'

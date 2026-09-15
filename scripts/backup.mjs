@@ -6,6 +6,7 @@
  * Writes a complete, self-contained copy to data/backups/. Safe to run any
  * time, including while the journal is open in a browser.
  */
+import '../server/lib/env.js'
 import { snapshot, snapshotDir } from '../server/lib/backup.js'
 
 const result = snapshot({ label: 'manual' })

@@ -39,11 +39,33 @@ Then open Command Prompt or PowerShell and check it worked:
 node --version
 ```
 
-You want v22 or higher.
+You want v22 or higher. Node 24 is fine and is what the current installer gives
+you; the whole test suite is verified against both.
+
+### Getting the code
+
+**With Git** (recommended, makes updates one command):
 
 ```bash
 git clone https://github.com/noahboettiger/trading-journal.git
 cd trading-journal
+```
+
+Windows does not ship with Git. Install it from
+[git-scm.com](https://git-scm.com/download/win), accepting every default.
+Later, `git pull` fetches any changes. Your `data/` folder is gitignored, so
+updating never touches your trades.
+
+**Without Git:** on the GitHub page, click the green **Code** button, then
+**Download ZIP**, and extract it somewhere you will remember. Updating later
+means downloading a fresh ZIP and copying your `data/` folder across, so Git is
+worth the five minutes.
+
+### Starting it
+
+From inside the project folder:
+
+```bash
 npm install
 npm run build
 npm start
@@ -366,7 +388,8 @@ is human-readable and portable, but it does not include your chart images.
 
 ### Settings, without fighting your shell
 
-Copy `.env.example` to `.env` and edit it. Every option below goes in that file,
+Copy `.env.example` to `.env` and edit it. The journal says `[config] loaded .env`
+on startup when it finds one, and stays quiet when it does not. Every option below goes in that file,
 one per line, and works identically on Windows, macOS and Linux:
 
 ```
