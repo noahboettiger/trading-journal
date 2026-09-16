@@ -4,6 +4,7 @@ import {
   LayoutDashboard, ListOrdered, CalendarDays, ChartNoAxesCombined,
   NotebookPen, Settings as SettingsIcon, Plus, Moon, Sun, LineChart,
 } from 'lucide-react'
+import { titleCase } from '@/lib/format'
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -128,7 +129,7 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
   return (
     <div className="flex flex-wrap items-end justify-between gap-3 border-b border-line px-4 py-4 lg:px-7 lg:py-5">
       <div>
-        <h1 className="text-lg font-semibold tracking-tight lg:text-xl">{title}</h1>
+        <h1 className="text-lg font-semibold tracking-tight lg:text-xl">{titleCase(title)}</h1>
         {subtitle && <p className="mt-0.5 text-sm text-ink-faint">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}

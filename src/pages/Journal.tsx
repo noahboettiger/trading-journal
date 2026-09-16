@@ -6,21 +6,26 @@ import { formatDay, todayISO } from '@/lib/format'
 import { PageHeader } from '@/components/Layout'
 import { Card, CardHeader, Field, Input, Select, Textarea, Spinner, ErrorNote, EmptyState } from '@/components/ui'
 
-const TEMPLATE = `Operational readiness
-- At desk on time:
-- Pre-session prep done:
+const TEMPLATE = `How would I rate the day overall?
 
-What the market did
--
 
-What I did
--
+How was my sleep?
 
-What I would repeat
--
 
-What I would change
--`
+What else is going on in my life right now? Any stress outside of trading?
+
+
+The trades I took:
+
+
+What would perfect trading have looked like today?
+
+
+What is the gap between that and what I actually did?
+
+
+What one thing closes that gap tomorrow?
+`
 
 interface Entry { id: number; entry_date: string; session: string | null; content: string; mood: string | null }
 

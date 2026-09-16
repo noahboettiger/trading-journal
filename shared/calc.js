@@ -411,3 +411,15 @@ export function percentOfMaxProfit(t) {
   // An open position has captured nothing yet; treat a missing exit as zero.
   return ((entry - (exit ?? 0)) / Math.abs(entry)) * 100
 }
+
+/**
+ * Fields that hold several values in one text column, stored comma separated.
+ * A single legacy value parses as a one-item list, so nothing needs migrating.
+ */
+export const parseMulti = (value) =>
+  String(value ?? '')
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean)
+
+export const joinMulti = (values) => (Array.isArray(values) ? values : parseMulti(values)).join(', ')

@@ -12,6 +12,7 @@ import type { Trade } from '@/lib/types'
 import { PageHeader } from '@/components/Layout'
 import { Card, CardHeader, Badge, Spinner, ErrorNote, EmptyState } from '@/components/ui'
 import { RuleChecklist, ComplianceBadge } from '@/components/RuleChecklist'
+import { parseMulti } from '@shared/calc.js'
 
 function FieldRow({ label, value, icon }: { label: string; value: React.ReactNode; icon?: React.ReactNode }) {
   return (
@@ -131,11 +132,27 @@ export default function TradeDetail() {
           )}
         </Card>
 
-        <div className="grid gap-5 xl:grid-cols-2">
-          {/* Trade fields */}
-          <Card className="self-start">
-            <CardHeader title="Trade Fields" />
-            <div className="grid gap-x-6 px-5 py-2 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Summary, directly under the chart where the eye lands first */}
+        <Card>
+          <div className="grid divide-y divide-line sm:grid-cols-3 sm:divide-x sm:divide-y-0 lg:grid-cols-6">
+            {summary.map((s) => (
+              <div key={s.label} className="flex items-center gap-3 px-5 py-4">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface-2 text-ink-muted">
+                  {s.icon}
+                </span>
+                <div className="min-w-0">
+                  <div className="label">{s.label}</div>
+                  <div className={`truncate text-base font-semibold tnum ${s.cls}`}>{s.value}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* Trade fields, full width */}
+        <Card>
+          <CardHeader title="Trade Fields" />
+          <div className="grid gap-x-6 px-5 py-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
               <FieldRow label="Trade number" value={`#${trade.trade_no}`} />
               <FieldRow label="Ticker" value={trade.symbol} />
               <FieldRow label="Direction" value={trade.direction === 'short' ? 'Short' : 'Long'} />
@@ -211,19 +228,18 @@ export default function TradeDetail() {
                 <FieldRow label="Planned R:R" value={`${ratio(trade.planned_rr)}:1`} />
               )}
               {!!trade.commissions && <FieldRow label="Commissions" value={money(trade.commissions)} />}
-            </div>
-          </Card>
+          </div>
+        </Card>
 
-          {/* Rules: the itemized checklist, read-only */}
-          <Card className="self-start">
-            <CardHeader
-              title="Rule Compliance"
-              subtitle={trade.playbook_name ?? 'No playbook'}
-              right={<ComplianceBadge checks={trade.rule_checks} />}
-            />
-            <RuleChecklist checks={trade.rule_checks} readOnly />
-          </Card>
-        </div>
+        {/* Rules: the itemized checklist, read-only */}
+        <Card>
+          <CardHeader
+            title="Rule Compliance"
+            subtitle={trade.playbook_name ?? 'No playbook'}
+            right={<ComplianceBadge checks={trade.rule_checks} />}
+          />
+          <RuleChecklist checks={trade.rule_checks} readOnly columns />
+        </Card>
 
         {/* Review content */}
         <Card>
@@ -232,7 +248,17 @@ export default function TradeDetail() {
             <ReviewBlock label="Thesis - why I took it">{trade.thesis || 'No thesis recorded.'}</ReviewBlock>
           </div>
           <div className="grid gap-6 p-5 lg:grid-cols-3">
-            <ReviewBlock label="Emotional state">{trade.emotional_state || 'Not recorded.'}</ReviewBlock>
+            <ReviewBlock label="Emotional state">
+              {trade.emotional_state ? (
+                <span className="flex flex-wrap gap-1.5">
+                  {parseMulti(trade.emotional_state).map((mood) => (
+                    <Badge key={mood} tone="accent">{mood}</Badge>
+                  ))}
+                </span>
+              ) : (
+                'Not recorded.'
+              )}
+            </ReviewBlock>
             <ReviewBlock label="Mistake tags">
               {trade.tags.length ? (
                 <span className="flex flex-wrap gap-1.5">
@@ -250,22 +276,6 @@ export default function TradeDetail() {
           </div>
         </Card>
 
-        {/* Bottom summary strip */}
-        <Card>
-          <div className="grid divide-y divide-line sm:grid-cols-3 sm:divide-x sm:divide-y-0 lg:grid-cols-6">
-            {summary.map((s) => (
-              <div key={s.label} className="flex items-center gap-3 px-5 py-4">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface-2 text-ink-muted">
-                  {s.icon}
-                </span>
-                <div>
-                  <div className="label">{s.label}</div>
-                  <div className={`text-base font-semibold tnum ${s.cls}`}>{s.value}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
       </div>
     </>
   )

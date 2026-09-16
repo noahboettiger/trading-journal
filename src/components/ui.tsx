@@ -1,5 +1,5 @@
 import { type ReactNode, type SelectHTMLAttributes, type InputHTMLAttributes, type TextareaHTMLAttributes } from 'react'
-import { pnlClass } from '@/lib/format'
+import { pnlClass, titleCase } from '@/lib/format'
 
 export function Card({ children, className = '', ...rest }: { children: ReactNode; className?: string } & Record<string, any>) {
   return (
@@ -17,8 +17,11 @@ export function CardHeader({ title, icon, right, subtitle }: { title: ReactNode;
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-surface-2 text-ink-muted">{icon}</span>
         )}
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold truncate">{title}</h2>
-          {subtitle && <p className="text-xs text-ink-faint truncate">{subtitle}</p>}
+          {/* Headings are Title Case; the subtitle underneath stays sentence case. */}
+          <h2 className="truncate text-sm font-semibold">
+            {typeof title === 'string' ? titleCase(title) : title}
+          </h2>
+          {subtitle && <p className="truncate text-xs text-ink-faint">{subtitle}</p>}
         </div>
       </div>
       {right && <div className="shrink-0 max-w-full overflow-x-auto">{right}</div>}

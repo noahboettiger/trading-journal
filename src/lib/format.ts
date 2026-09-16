@@ -58,3 +58,34 @@ export const pnlClass = (v: number | null | undefined) =>
 
 export const outcomeClass = (o: string | null | undefined) =>
   o === 'win' ? 'text-win' : o === 'loss' ? 'text-loss' : 'text-ink-muted'
+
+/** Words that stay lowercase inside a title unless they lead it. */
+const MINOR_WORDS = new Set([
+  'a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'from', 'in', 'into', 'nor',
+  'of', 'on', 'onto', 'or', 'over', 'per', 'the', 'to', 'vs', 'with',
+])
+
+/**
+ * Title Case for headings.
+ *
+ * A word that already carries an uppercase letter past its first character is
+ * left exactly as it is, so acronyms and symbols survive: ICT, P&L, DTE, R:R
+ * and names like Cash-Secured are not flattened into Ict, P&l or Cash-secured.
+ */
+export function titleCase(input: string): string {
+  const words = input.split(' ')
+  return words
+    .map((word, i) => {
+      if (!word) return word
+      if (/[A-Z]/.test(word.slice(1))) return word
+
+      const bare = word.replace(/[^a-zA-Z]/g, '').toLowerCase()
+      const isEdge = i === 0 || i === words.length - 1
+      if (!isEdge && MINOR_WORDS.has(bare)) return word.toLowerCase()
+
+      // Capitalise the first letter wherever it sits, so "(optional)" and
+      // ":session" get their leading punctuation left alone.
+      return word.replace(/[a-zA-Z]/, (c) => c.toUpperCase())
+    })
+    .join(' ')
+}

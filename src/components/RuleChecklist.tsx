@@ -13,10 +13,13 @@ export function RuleChecklist({
   onChange,
   readOnly = false,
   showViolations = readOnly,
+  columns = false,
 }: {
   checks: RuleCheck[]
   onChange?: (next: RuleCheck[]) => void
   readOnly?: boolean
+  /** Lay the sections out side by side, for a full-width card. */
+  columns?: boolean
   /**
    * Whether an unchecked rule counts as broken yet. A brand new trade has not
    * been graded, so nothing should read as a violation until the trader has
@@ -48,11 +51,20 @@ export function RuleChecklist({
   }
 
   return (
-    <div className="divide-y divide-line">
+    <div
+      className={
+        columns
+          ? 'grid gap-x-6 px-2 py-2 md:grid-cols-2 xl:grid-cols-3'
+          : 'divide-y divide-line'
+      }
+    >
       {sections.map(([section, rows]) => {
         const done = rows.filter((r) => r.check.checked).length
         return (
-          <div key={section} className="px-4 py-3.5 lg:px-5">
+          <div
+            key={section}
+            className={columns ? 'px-3 py-3' : 'border-b border-line px-4 py-3.5 last:border-0 lg:px-5'}
+          >
             <div className="mb-2.5 flex items-center justify-between gap-3">
               <h3 className="label">{section}</h3>
               <span className={`text-[11px] font-semibold tnum ${done === rows.length ? 'text-win' : 'text-ink-faint'}`}>

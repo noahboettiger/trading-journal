@@ -13,10 +13,12 @@ import { PageHeader } from '@/components/Layout'
 import { Card, CardHeader, Field, Input, Select, Textarea, Badge, Spinner, ErrorNote } from '@/components/ui'
 import { RuleChecklist } from '@/components/RuleChecklist'
 import { ChartUpload } from '@/components/ChartUpload'
+import { ChipMultiSelect } from '@/components/ChipMultiSelect'
 import {
   deriveGrossPnl, deriveNetPnl, deriveRiskAmount, resultR,
   daysHeld, dteAtEntry, dteAtExit, returnOnRisk,
   collateralRequired, creditReceived, returnOnCollateral, annualisedReturn, percentOfMaxProfit,
+  parseMulti, joinMulti,
 } from '@shared/calc.js'
 
 type FormState = Record<string, any>
@@ -479,33 +481,26 @@ export default function TradeForm() {
               <CardHeader title="Review" />
               <div className="space-y-4 p-5">
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Emotional state">
-                    <Select value={form.emotional_state ?? ''} options={opt('emotion')} placeholder="Select" onChange={(e) => set({ emotional_state: e.target.value })} />
+                  <Field label="Emotional state" hint="Pick as many as applied">
+                    <ChipMultiSelect
+                      options={opt('emotion')}
+                      selected={parseMulti(form.emotional_state)}
+                      onChange={(next) => set({ emotional_state: joinMulti(next) })}
+                      emptyText="Add emotional states in Settings."
+                    />
                   </Field>
                   <Field label="Mistake tags">
-                    <div className="flex flex-wrap gap-1.5">
-                      {reference.tags.map((tag) => {
-                        const on = (form.tag_ids as number[]).includes(tag.id)
-                        return (
-                          <button
-                            key={tag.id}
-                            type="button"
-                            onClick={() =>
-                              set({
-                                tag_ids: on
-                                  ? (form.tag_ids as number[]).filter((t) => t !== tag.id)
-                                  : [...(form.tag_ids as number[]), tag.id],
-                              })
-                            }
-                            className={`rounded-full border px-2.5 py-1 text-xs font-medium transition ${
-                              on ? 'border-loss/40 bg-loss/10 text-loss' : 'border-line bg-surface-2 text-ink-muted hover:text-ink'
-                            }`}
-                          >
-                            {tag.name}
-                          </button>
-                        )
-                      })}
-                    </div>
+                    <ChipMultiSelect
+                      tone="loss"
+                      options={reference.tags.map((t) => t.name)}
+                      selected={reference.tags
+                        .filter((t) => (form.tag_ids as number[]).includes(t.id))
+                        .map((t) => t.name)}
+                      onChange={(names) =>
+                        set({ tag_ids: reference.tags.filter((t) => names.includes(t.name)).map((t) => t.id) })
+                      }
+                      emptyText="Add mistake tags in Settings."
+                    />
                   </Field>
                 </div>
                 <Field label="Thesis" hint="Why you took it, written before or at entry">

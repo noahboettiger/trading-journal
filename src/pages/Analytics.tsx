@@ -223,7 +223,12 @@ export default function Analytics() {
             rows={sortByGrade(stats.byGrade, 'grade')}
             keyField="grade"
           />
-          <BreakdownTable title="By emotional state" subtitle="What your state of mind is worth" rows={stats.byEmotion} keyField="emotion" />
+          <BreakdownTable
+            title="By emotional state"
+            subtitle="Trades count under every state they carry, so these overlap"
+            rows={stats.byEmotion}
+            keyField="emotion"
+          />
           <BreakdownTable title="By mistake tag" subtitle="Cost of each recurring mistake" rows={stats.byMistake} keyField="mistake" />
           <BreakdownTable title="By playbook" rows={stats.byPlaybook} keyField="playbook" />
         </div>

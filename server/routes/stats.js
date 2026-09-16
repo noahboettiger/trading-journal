@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { listTrades } from '../lib/trades.js'
 import {
   summarise, dailyRollup, weeklyRollup, monthlyRollup, equityCurve, groupPerformance, ruleCompliance,
+  parseMulti,
 } from '../../shared/calc.js'
 
 export const statsRouter = Router()
@@ -97,7 +98,15 @@ statsRouter.get('/', (req, res) => {
     byPlaybook: groupPerformance(trades, (t) => t.playbook_name, 'playbook'),
     byGrade: groupPerformance(trades, (t) => t.execution_grade, 'grade'),
     byRating: groupPerformance(trades, (t) => t.trade_rating, 'rating'),
-    byEmotion: groupPerformance(trades, (t) => t.emotional_state, 'emotion'),
+    // Emotional state holds several values, so a trade is counted under each
+    // one it carries. Buckets therefore overlap and will not sum to the total.
+    byEmotion: groupPerformance(
+      trades.flatMap((t) =>
+        parseMulti(t.emotional_state).map((mood) => ({ ...t, _mood: mood })),
+      ),
+      (t) => t._mood,
+      'emotion',
+    ),
     byDayOfWeek: groupPerformance(
       trades,
       (t) => DOW[new Date(`${String(t.trade_date).slice(0, 10)}T12:00:00`).getDay()],
