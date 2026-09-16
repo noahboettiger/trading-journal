@@ -8,7 +8,7 @@ import { PageHeader } from '@/components/Layout'
 import { Card, CardHeader, Input, Select, Spinner, ErrorNote, Badge, Segmented } from '@/components/ui'
 
 const LIST_KINDS: { kind: LookupKind; label: string; hint: string }[] = [
-  { kind: 'setup', label: 'Trade types', hint: 'Judas Swing, IFVG Reversal, Break and Retest...' },
+  { kind: 'setup', label: 'Entry models', hint: 'Freestyle, iFVG Reversal, Mech Model, 2022 Model...' },
   { kind: 'style', label: 'Trade styles', hint: 'Day Trade, Swing Trade, Scalp...' },
   { kind: 'session', label: 'Sessions', hint: 'Asia, London, NY AM...' },
   { kind: 'source', label: 'Sources', hint: 'Prop, Personal, Eval...' },

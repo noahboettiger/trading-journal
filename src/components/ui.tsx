@@ -120,7 +120,7 @@ export function Badge({ children, tone = 'neutral' }: { children: ReactNode; ton
     accent: 'bg-accent/10 text-accent border-accent/25',
   }
   return (
-    <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold ${tones[tone]}`}>
+    <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-semibold ${tones[tone]}`}>
       {children}
     </span>
   )

@@ -4,7 +4,7 @@ import { Save, Trash2, ChevronDown, Calculator } from 'lucide-react'
 
 import { api } from '@/lib/api'
 import { useAsync, useReference } from '@/lib/hooks'
-import { money, rMultiple, pct, todayISO, pnlClass, ratio } from '@/lib/format'
+import { money, rMultiple, pct, todayISO, pnlClass } from '@/lib/format'
 import {
   pointValueFor, GRADES, ASSET_CLASSES, DIRECTIONS, OPTION_SIDES, STATUSES, CLOSE_METHODS,
 } from '@/lib/instruments'
@@ -14,7 +14,7 @@ import { Card, CardHeader, Field, Input, Select, Textarea, Badge, Spinner, Error
 import { RuleChecklist } from '@/components/RuleChecklist'
 import { ChartUpload } from '@/components/ChartUpload'
 import {
-  deriveGrossPnl, deriveNetPnl, deriveRiskAmount, plannedRR, resultR,
+  deriveGrossPnl, deriveNetPnl, deriveRiskAmount, resultR,
   daysHeld, dteAtEntry, dteAtExit, returnOnRisk,
   collateralRequired, creditReceived, returnOnCollateral, annualisedReturn, percentOfMaxProfit,
 } from '@shared/calc.js'
@@ -98,7 +98,6 @@ export default function TradeForm() {
   const grossPreview = n(form.gross_pnl) ?? deriveGrossPnl(calc)
   const netPreview = n(form.net_pnl) ?? deriveNetPnl({ ...calc, gross_pnl: grossPreview })
   const riskPreview = n(form.risk_amount) ?? deriveRiskAmount(calc)
-  const rrPreview = plannedRR(calc)
   const rPreview = resultR({ ...calc, net_pnl: netPreview, risk_amount: riskPreview })
   const held = daysHeld(form)
   const dteIn = dteAtEntry(form)
@@ -222,7 +221,7 @@ export default function TradeForm() {
         <ErrorNote error={error} />
 
         {/* Live math strip */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {(isSelling
             ? [
                 { label: 'Net P&L', value: netPreview === null ? '--' : money(netPreview, { sign: true }), cls: pnlClass(netPreview) },
@@ -240,7 +239,6 @@ export default function TradeForm() {
                 { label: 'Net P&L', value: netPreview === null ? '--' : money(netPreview, { sign: true }), cls: pnlClass(netPreview) },
                 { label: 'Result', value: rPreview === null ? '--' : rMultiple(rPreview), cls: pnlClass(rPreview) },
                 { label: 'Risk', value: riskPreview === null ? '--' : money(riskPreview), cls: 'text-ink' },
-                { label: 'Planned R:R', value: rrPreview === null ? '--' : `${ratio(rrPreview)}:1`, cls: 'text-ink' },
                 isOptions
                   ? { label: 'Return on risk', value: ror === null ? '--' : pct(ror), cls: pnlClass(ror) }
                   : { label: 'Gross P&L', value: grossPreview === null ? '--' : money(grossPreview, { sign: true }), cls: pnlClass(grossPreview) },
@@ -292,7 +290,7 @@ export default function TradeForm() {
                   <Select value={form.direction} options={DIRECTIONS} onChange={(e) => set({ direction: e.target.value })} />
                 </Field>
 
-                <Field label="Trade type" hint="Manage this list in Settings">
+                <Field label="Entry model" hint="Manage this list in Settings">
                   <Select
                     value={form.setup ?? ''}
                     options={opt('setup')}
@@ -377,9 +375,6 @@ export default function TradeForm() {
                     <Field label="Exit premium" hint="0 if expired worthless">
                       <Input type="number" step="any" value={form.exit_premium ?? ''} onChange={(e) => set({ exit_premium: e.target.value })} />
                     </Field>
-                    <Field label="Commissions">
-                      <Input type="number" step="any" value={form.commissions ?? ''} onChange={(e) => set({ commissions: e.target.value })} />
-                    </Field>
                     <Field label="How it closed">
                       <Select
                         value={form.close_method ?? ''}
@@ -440,27 +435,18 @@ export default function TradeForm() {
                   </div>
                 </div>
               ) : (
-                <div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
                   <Field label="Contracts">
                     <Input type="number" step="any" value={form.contracts ?? ''} onChange={(e) => set({ contracts: e.target.value })} />
                   </Field>
                   <Field label="Point value" hint="Prefilled for known symbols">
                     <Input type="number" step="any" value={form.point_value ?? ''} onChange={(e) => set({ point_value: e.target.value })} />
                   </Field>
-                  <Field label="Commissions">
-                    <Input type="number" step="any" value={form.commissions ?? ''} onChange={(e) => set({ commissions: e.target.value })} />
-                  </Field>
-                  <Field label="Entry price">
+                  <Field label="Entry price" hint="Optional">
                     <Input type="number" step="any" value={form.entry_price ?? ''} onChange={(e) => set({ entry_price: e.target.value })} />
                   </Field>
-                  <Field label="Exit price">
+                  <Field label="Exit price" hint="Optional">
                     <Input type="number" step="any" value={form.exit_price ?? ''} onChange={(e) => set({ exit_price: e.target.value })} />
-                  </Field>
-                  <Field label="Stop loss">
-                    <Input type="number" step="any" value={form.stop_price ?? ''} onChange={(e) => set({ stop_price: e.target.value })} />
-                  </Field>
-                  <Field label="Target">
-                    <Input type="number" step="any" value={form.target_price ?? ''} onChange={(e) => set({ target_price: e.target.value })} />
                   </Field>
                 </div>
               )}
@@ -469,7 +455,7 @@ export default function TradeForm() {
             {/* Result overrides */}
             <Card>
               <CardHeader title="Result" subtitle="Leave blank to use the calculated value above" />
-              <div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-5">
                 <Field label="Risk ($)" hint={riskPreview !== null && !form.risk_amount ? `Auto: ${money(riskPreview)}` : undefined}>
                   <Input type="number" step="any" placeholder={riskPreview !== null ? String(riskPreview) : ''} value={form.risk_amount ?? ''} onChange={(e) => set({ risk_amount: e.target.value })} />
                 </Field>
@@ -479,7 +465,10 @@ export default function TradeForm() {
                 <Field label="R override" hint="Only if you grade R by hand">
                   <Input type="number" step="any" placeholder={rPreview !== null ? rPreview.toFixed(2) : ''} value={form.result_r_override ?? ''} onChange={(e) => set({ result_r_override: e.target.value })} />
                 </Field>
-                <Field label="Execution grade">
+                <Field label="Trade rating" hint="Quality of the setup itself">
+                  <Select value={form.trade_rating ?? ''} options={GRADES} placeholder="Unrated" onChange={(e) => set({ trade_rating: e.target.value })} />
+                </Field>
+                <Field label="Execution grade" hint="How well you handled it">
                   <Select value={form.execution_grade ?? ''} options={GRADES} placeholder="Ungraded" onChange={(e) => set({ execution_grade: e.target.value })} />
                 </Field>
               </div>

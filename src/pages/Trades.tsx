@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Search, SlidersHorizontal, Plus, X } from 'lucide-react'
+import { Search, SlidersHorizontal, Plus, X, Pencil } from 'lucide-react'
 
 import { api } from '@/lib/api'
 import { useAsync, useDebounced, useReference, useStored } from '@/lib/hooks'
@@ -9,6 +9,7 @@ import type { Trade } from '@/lib/types'
 import { PageHeader } from '@/components/Layout'
 import { Card, Select, Input, Spinner, ErrorNote, EmptyState, Badge, Segmented } from '@/components/ui'
 import { ComplianceBadge } from '@/components/RuleChecklist'
+import { GRADES } from '@/lib/instruments'
 
 const RANGES = [
   { value: 'all', label: 'All time' },
@@ -38,7 +39,8 @@ export default function Trades() {
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useStored<Record<string, string>>('tj-trade-filters', {
     range: 'all', asset_class: 'all', trade_style: 'all', option_side: 'all',
-    setup: 'all', session: 'all', outcome: 'all', trade_source: 'all', symbol: '',
+    setup: 'all', session: 'all', outcome: 'all', trade_source: 'all',
+    trade_rating: 'all', symbol: '',
   })
   const debouncedSearch = useDebounced(search)
 
@@ -54,7 +56,8 @@ export default function Trades() {
   const clear = () =>
     setFilters({
       range: 'all', asset_class: 'all', trade_style: 'all', option_side: 'all',
-      setup: 'all', session: 'all', outcome: 'all', trade_source: 'all', symbol: '',
+      setup: 'all', session: 'all', outcome: 'all', trade_source: 'all',
+      trade_rating: 'all', symbol: '',
     })
 
   const totals = useMemo(() => {
@@ -95,7 +98,7 @@ export default function Trades() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search notes, lessons, ticker, trade type"
+              placeholder="Search notes, thesis, lessons, ticker, entry model"
               className="!pl-9"
             />
           </div>
@@ -116,7 +119,9 @@ export default function Trades() {
               <Select value={filters.option_side} onChange={(e) => set({ option_side: e.target.value })}
                 options={[{ value: 'all', label: 'Buying and selling' }, { value: 'buy', label: 'Buying premium' }, { value: 'sell', label: 'Selling premium' }]} />
               <Select value={filters.setup} onChange={(e) => set({ setup: e.target.value })}
-                options={[{ value: 'all', label: 'All trade types' }, ...reference.values('setup').map((v) => ({ value: v, label: v }))]} />
+                options={[{ value: 'all', label: 'All entry models' }, ...reference.values('setup').map((v) => ({ value: v, label: v }))]} />
+              <Select value={filters.trade_rating} onChange={(e) => set({ trade_rating: e.target.value })}
+                options={[{ value: 'all', label: 'All setup ratings' }, ...GRADES.map((v) => ({ value: v, label: `${v} setups` }))]} />
               <Select value={filters.session} onChange={(e) => set({ session: e.target.value })}
                 options={[{ value: 'all', label: 'All sessions' }, ...reference.values('session').map((v) => ({ value: v, label: v }))]} />
               <Select value={filters.trade_source} onChange={(e) => set({ trade_source: e.target.value })}
@@ -154,22 +159,22 @@ export default function Trades() {
         ) : (
           <Card className="overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-sm">
+              <table className="w-full min-w-[1120px] text-sm">
                 <thead>
                   <tr className="border-b border-line text-left">
-                    {['#', 'Date', 'Ticker', 'Style', 'Trade type', 'Session', 'Rules', 'Risk', 'R', 'P&L', 'Grade'].map((h) => (
-                      <th key={h} className="label whitespace-nowrap px-4 py-2.5 font-semibold">{h}</th>
+                    {['#', 'Date', 'Ticker', 'Style', 'Entry model', 'Session', 'Rules', 'Risk', 'R', 'P&L', 'Setup', 'Exec', ''].map((h, i) => (
+                      <th key={i} className="label whitespace-nowrap px-3 py-2.5 font-semibold">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
                   {trades.map((t) => (
                     <tr key={t.id} className="transition hover:bg-surface-2/60">
-                      <td className="px-4 py-2.5">
+                      <td className="whitespace-nowrap px-3 py-2.5">
                         <Link to={`/trades/${t.id}`} className="font-semibold text-accent hover:underline tnum">#{t.trade_no}</Link>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-ink-muted tnum">{formatDay(t.trade_date, { month: 'short', day: 'numeric' })}</td>
-                      <td className="px-4 py-2.5">
+                      <td className="whitespace-nowrap px-3 py-2.5 text-ink-muted tnum">{formatDay(t.trade_date, { month: 'short', day: 'numeric' })}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5">
                         <div className="flex items-center gap-1.5">
                           <span className="font-semibold">{t.symbol}</span>
                           <span className={`text-[10px] font-bold uppercase ${t.direction === 'short' ? 'text-loss' : 'text-win'}`}>
@@ -183,14 +188,25 @@ export default function Trades() {
                           )}
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-ink-muted">{t.trade_style}</td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-ink-muted">{t.setup ?? '--'}</td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-ink-muted">{t.session ?? '--'}</td>
-                      <td className="px-4 py-2.5"><ComplianceBadge checks={t.rule_checks} /></td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-ink-muted">{t.trade_style}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-ink-muted">{t.setup ?? '--'}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-ink-muted">{t.session ?? '--'}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5"><ComplianceBadge checks={t.rule_checks} compact /></td>
                       <td className="px-4 py-2.5 text-ink-muted tnum">{money(t.risk_amount)}</td>
-                      <td className={`px-4 py-2.5 font-semibold tnum ${pnlClass(t.result_r)}`}>{rMultiple(t.result_r)}</td>
-                      <td className={`px-4 py-2.5 font-semibold tnum ${pnlClass(t.net_pnl)}`}>{money(t.net_pnl, { sign: true })}</td>
-                      <td className="px-4 py-2.5">{t.execution_grade ? <Badge>{t.execution_grade}</Badge> : <span className="text-ink-faint">--</span>}</td>
+                      <td className={`whitespace-nowrap px-3 py-2.5 font-semibold tnum ${pnlClass(t.result_r)}`}>{rMultiple(t.result_r)}</td>
+                      <td className={`whitespace-nowrap px-3 py-2.5 font-semibold tnum ${pnlClass(t.net_pnl)}`}>{money(t.net_pnl, { sign: true })}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5">{t.trade_rating ? <Badge>{t.trade_rating}</Badge> : <span className="text-ink-faint">--</span>}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5">{t.execution_grade ? <Badge>{t.execution_grade}</Badge> : <span className="text-ink-faint">--</span>}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5">
+                        <Link
+                          to={`/trades/${t.id}/edit`}
+                          title={`Edit trade #${t.trade_no}`}
+                          aria-label={`Edit trade #${t.trade_no}`}
+                          className="inline-flex rounded-md p-1.5 text-ink-faint transition hover:bg-surface-2 hover:text-ink"
+                        >
+                          <Pencil size={14} />
+                        </Link>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

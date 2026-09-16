@@ -176,6 +176,56 @@ const MIGRATIONS = [
   ALTER TABLE trades ADD COLUMN collateral   REAL;
   ALTER TABLE trades ADD COLUMN thesis       TEXT;
   `,
+
+  // 3 - setup quality rating, separate from how well it was executed
+  `
+  ALTER TABLE trades ADD COLUMN trade_rating TEXT;
+  `,
+
+  // 4 - condense the entry model list
+  //
+  // Trades store their entry model as text, so removing a list entry never
+  // changes a trade that already used it. Only the dropdown shrinks.
+  `
+  DELETE FROM lookups
+   WHERE kind = 'setup'
+     AND value IN ('LSRM', 'Judas Swing', '15m Continuation', 'MSS Reversal', 'Liquidity Sweep Reversal');
+
+  UPDATE lookups SET value = 'iFVG Reversal' WHERE kind = 'setup' AND value = 'IFVG Reversal';
+  UPDATE trades  SET setup = 'iFVG Reversal' WHERE setup = 'IFVG Reversal';
+
+  INSERT OR IGNORE INTO lookups (kind, value, sort_order) VALUES
+    ('setup', 'Freestyle',       0),
+    ('setup', 'iFVG Reversal',   1),
+    ('setup', 'Mech Model',      2),
+    ('setup', 'Break and Retest',3),
+    ('setup', '2022 Model',      4),
+    ('setup', 'Unicorn Model',   5);
+
+  UPDATE lookups SET sort_order = 0 WHERE kind = 'setup' AND value = 'Freestyle';
+  UPDATE lookups SET sort_order = 1 WHERE kind = 'setup' AND value = 'iFVG Reversal';
+  UPDATE lookups SET sort_order = 2 WHERE kind = 'setup' AND value = 'Mech Model';
+  UPDATE lookups SET sort_order = 3 WHERE kind = 'setup' AND value = 'Break and Retest';
+  UPDATE lookups SET sort_order = 4 WHERE kind = 'setup' AND value = '2022 Model';
+  UPDATE lookups SET sort_order = 5 WHERE kind = 'setup' AND value = 'Unicorn Model';
+  `,
+
+  // 5 - remember which money fields were typed by hand
+  //
+  // Without this, a value the trader entered gets silently recomputed from the
+  // price fields on the next unrelated edit. Entry and exit prices are optional
+  // reference points, so a figure derived from them must never overwrite the
+  // real one. Existing trades are marked manual wherever they carry a value,
+  // because those were all hand-entered.
+  `
+  ALTER TABLE trades ADD COLUMN manual_fields TEXT;
+
+  UPDATE trades SET manual_fields = TRIM(
+    (CASE WHEN net_pnl     IS NOT NULL THEN 'net_pnl,'     ELSE '' END) ||
+    (CASE WHEN risk_amount IS NOT NULL THEN 'risk_amount'  ELSE '' END),
+    ','
+  );
+  `,
 ]
 
 function migrate() {

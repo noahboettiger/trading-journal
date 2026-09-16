@@ -1,7 +1,7 @@
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import {
   LineChart as ChartIcon, Pencil, ArrowLeft, Compass, Target, DollarSign,
-  Award, TrendingUp, Clock, CalendarClock,
+  Award, TrendingUp, Clock, CalendarClock, Star,
 } from 'lucide-react'
 
 import { api } from '@/lib/api'
@@ -47,7 +47,7 @@ export default function TradeDetail() {
   const isSelling = isOptions && trade.option_side === 'sell'
   const dateLabel = formatDay(trade.trade_date)
 
-  const summary = isSelling
+  const summary: { label: string; value: React.ReactNode; icon: React.ReactNode; cls: string }[] = isSelling
     ? [
         { label: 'Credit taken in', value: money(trade.credit_received), icon: <DollarSign size={15} />, cls: '' },
         { label: 'Collateral', value: money(trade.collateral_required, { cents: false }), icon: <Compass size={15} />, cls: '' },
@@ -80,6 +80,7 @@ export default function TradeDetail() {
       icon: <TrendingUp size={15} />,
       cls: trade.outcome === 'win' ? 'text-win' : trade.outcome === 'loss' ? 'text-loss' : '',
     },
+    { label: 'Setup', value: trade.trade_rating ?? '--', icon: <Star size={15} />, cls: '' },
     { label: 'Execution', value: trade.execution_grade ?? '--', icon: <Award size={15} />, cls: '' },
   ]
 
@@ -140,7 +141,7 @@ export default function TradeDetail() {
               <FieldRow label="Direction" value={trade.direction === 'short' ? 'Short' : 'Long'} />
               <FieldRow label="Instrument" value={isOptions ? 'Options' : 'Futures'} />
               <FieldRow label="Trade style" value={trade.trade_style} />
-              <FieldRow label="Trade type" value={trade.setup} />
+              <FieldRow label="Entry model" value={trade.setup} />
               <FieldRow label="Session" value={trade.session} />
               <FieldRow label="Timeframe" value={trade.timeframe} />
               <FieldRow label="Source" value={trade.trade_source} />
@@ -194,18 +195,22 @@ export default function TradeDetail() {
                   <FieldRow label="Contracts" value={num(trade.contracts)} />
                   <FieldRow label="Entry price" value={num(trade.entry_price)} />
                   <FieldRow label="Exit price" value={num(trade.exit_price)} />
-                  <FieldRow label="Stop loss" value={num(trade.stop_price)} />
-                  <FieldRow label="Target" value={num(trade.target_price)} />
                   <FieldRow label="Point value" value={trade.point_value === null ? '--' : `$${num(trade.point_value)}`} />
+                  {/* No longer collected on the form, so only shown for trades that have them. */}
+                  {trade.stop_price !== null && <FieldRow label="Stop loss" value={num(trade.stop_price)} />}
+                  {trade.target_price !== null && <FieldRow label="Target" value={num(trade.target_price)} />}
                 </>
               )}
 
               <FieldRow label="Risk ($)" value={money(trade.risk_amount)} />
-              <FieldRow label="Planned R:R" value={trade.planned_rr === null ? '--' : `${ratio(trade.planned_rr)}:1`} />
-              <FieldRow label="Commissions" value={money(trade.commissions)} />
               <FieldRow label="Result R" value={<span className={pnlClass(trade.result_r)}>{rMultiple(trade.result_r)}</span>} />
               <FieldRow label="Net P&L" value={<span className={pnlClass(trade.net_pnl)}>{money(trade.net_pnl, { sign: true })}</span>} />
+              <FieldRow label="Trade rating" value={trade.trade_rating} />
               <FieldRow label="Execution grade" value={trade.execution_grade} />
+              {trade.planned_rr !== null && (
+                <FieldRow label="Planned R:R" value={`${ratio(trade.planned_rr)}:1`} />
+              )}
+              {!!trade.commissions && <FieldRow label="Commissions" value={money(trade.commissions)} />}
             </div>
           </Card>
 
@@ -247,7 +252,7 @@ export default function TradeDetail() {
 
         {/* Bottom summary strip */}
         <Card>
-          <div className="grid divide-y divide-line sm:grid-cols-3 sm:divide-x sm:divide-y-0 lg:grid-cols-5">
+          <div className="grid divide-y divide-line sm:grid-cols-3 sm:divide-x sm:divide-y-0 lg:grid-cols-6">
             {summary.map((s) => (
               <div key={s.label} className="flex items-center gap-3 px-5 py-4">
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface-2 text-ink-muted">

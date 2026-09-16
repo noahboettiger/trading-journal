@@ -133,16 +133,23 @@ export function RuleChecklist({
   )
 }
 
-/** Compact compliance summary badge used on cards and tables. */
-export function ComplianceBadge({ checks }: { checks: RuleCheck[] }) {
-  if (!checks.length) return <span className="text-xs text-ink-faint">Not graded</span>
+/**
+ * Compact compliance summary. `compact` drops the wording for table rows, where
+ * the column header already says "Rules" and a wrapping badge makes every row
+ * three lines tall.
+ */
+export function ComplianceBadge({ checks, compact = false }: { checks: RuleCheck[]; compact?: boolean }) {
+  if (!checks.length) {
+    return <span className="whitespace-nowrap text-xs text-ink-faint">{compact ? '--' : 'Not graded'}</span>
+  }
   const checked = checks.filter((c) => c.checked).length
   const criticalMissed = checks.filter((c) => c.is_critical && !c.checked).length
   const clean = checked === checks.length
   return (
     <Badge tone={clean ? 'win' : criticalMissed ? 'loss' : 'warn'}>
-      {checked}/{checks.length} rules
-      {criticalMissed > 0 && ` · ${criticalMissed} critical`}
+      {checked}/{checks.length}
+      {!compact && ' rules'}
+      {criticalMissed > 0 && (compact ? ` (${criticalMissed}!)` : ` · ${criticalMissed} critical`)}
     </Badge>
   )
 }

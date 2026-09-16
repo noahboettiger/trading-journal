@@ -23,7 +23,12 @@ export const pointValueFor = (symbol: string | null | undefined): number | null 
   return POINT_VALUES[key] ?? POINT_VALUES[symbol.trim().toUpperCase()] ?? null
 }
 
-export const GRADES = ['A', 'B', 'C', 'D', 'F']
+/**
+ * Shared scale for both ratings. Trade rating judges the setup you were handed;
+ * execution grade judges what you did with it. Same scale so the two can be
+ * compared directly, for example an A+ setup you executed as a B-.
+ */
+export const GRADES = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C']
 export const ASSET_CLASSES = [
   { value: 'futures', label: 'Futures' },
   { value: 'options', label: 'Options' },

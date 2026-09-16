@@ -39,8 +39,7 @@ const CSP_RULES = [
 /** Editable dropdown lists. Add to any of these from Settings. */
 const LOOKUPS = {
   setup: [
-    'LSRM', 'Freestyle', 'Judas Swing', '15m Continuation', 'IFVG Reversal',
-    'Break and Retest', 'MSS Reversal', 'Liquidity Sweep Reversal',
+    'Freestyle', 'iFVG Reversal', 'Mech Model', 'Break and Retest', '2022 Model', 'Unicorn Model',
   ],
   style: ['Day Trade', 'Swing Trade', 'Scalp', 'Position'],
   session: ['Asia', 'London', 'NY AM', 'NY PM', 'Overnight'],

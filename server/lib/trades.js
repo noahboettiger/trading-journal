@@ -16,7 +16,7 @@ export const TRADE_COLUMNS = [
   'underlying_entry', 'underlying_stop', 'underlying_target', 'dte_at_entry',
   'delta', 'theta', 'vega', 'iv_at_entry',
   'risk_amount', 'planned_rr', 'gross_pnl', 'commissions', 'net_pnl', 'result_r_override',
-  'execution_grade', 'emotional_state', 'thesis', 'notes', 'lesson_learned', 'reflections',
+  'execution_grade', 'trade_rating', 'emotional_state', 'thesis', 'notes', 'lesson_learned', 'reflections',
 ]
 
 const NUMERIC_COLUMNS = new Set([
@@ -44,7 +44,22 @@ function normalise(body) {
   return row
 }
 
-const DERIVED_COLUMNS = ['gross_pnl', 'net_pnl', 'planned_rr', 'risk_amount', 'collateral', 'outcome', 'commissions']
+const DERIVED_COLUMNS = [
+  'gross_pnl', 'net_pnl', 'planned_rr', 'risk_amount', 'collateral', 'outcome',
+  'commissions', 'manual_fields',
+]
+
+/**
+ * Money fields that stay exactly as typed once the trader has entered one.
+ *
+ * Entry and exit prices are optional reference values, so a figure derived from
+ * them must never overwrite a real P&L or risk number. Sending one of these as
+ * blank clears the mark and hands the field back to the derivation.
+ */
+const MANUAL_TRACKED = ['gross_pnl', 'net_pnl', 'risk_amount']
+
+const parseManual = (value) =>
+  new Set(String(value ?? '').split(',').map((f) => f.trim()).filter(Boolean))
 
 /**
  * Fill in money fields the client did not send explicitly.
@@ -58,11 +73,25 @@ const DERIVED_COLUMNS = ['gross_pnl', 'net_pnl', 'planned_rr', 'risk_amount', 'c
 function applyDerivations(row, provided = new Set()) {
   if (row.commissions === null || row.commissions === undefined) row.commissions = 0
 
-  if (!provided.has('gross_pnl')) {
+  // Anything the client sent explicitly becomes manual; anything it sent blank
+  // goes back to being derived.
+  const manual = parseManual(row.manual_fields)
+  for (const field of MANUAL_TRACKED) {
+    if (!provided.has(field)) continue
+    if (row[field] === null || row[field] === undefined) manual.delete(field)
+    else manual.add(field)
+  }
+
+  // The manual set already encodes "sent explicitly with a real value", so it
+  // is the only condition. Sending a field blank removes it from the set above
+  // and the derivation takes the field back, which is the point of clearing it.
+  const shouldDerive = (field) => !manual.has(field)
+
+  if (shouldDerive('gross_pnl')) {
     const v = deriveGrossPnl(row)
     if (v !== null) row.gross_pnl = v
   }
-  if (!provided.has('net_pnl')) {
+  if (shouldDerive('net_pnl')) {
     const v = deriveNetPnl(row)
     if (v !== null) row.net_pnl = v
   }
@@ -74,7 +103,7 @@ function applyDerivations(row, provided = new Set()) {
     const v = collateralRequired({ ...row, collateral: null })
     if (v !== null) row.collateral = v
   }
-  if (!provided.has('risk_amount')) {
+  if (shouldDerive('risk_amount')) {
     const v = deriveRiskAmount(row)
     if (v !== null) row.risk_amount = v
   }
@@ -82,6 +111,8 @@ function applyDerivations(row, provided = new Set()) {
     const v = deriveOutcome({ ...row, outcome: null })
     if (v !== null) row.outcome = v
   }
+
+  row.manual_fields = [...manual].join(',')
   return row
 }
 
@@ -251,6 +282,8 @@ export function listTrades(q = {}) {
   eq('direction', q.direction)
   eq('session', q.session)
   eq('setup', q.setup)
+  eq('trade_rating', q.trade_rating)
+  eq('execution_grade', q.execution_grade)
   eq('trade_source', q.trade_source)
   eq('status', q.status)
   if (q.symbol) {

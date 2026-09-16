@@ -96,6 +96,7 @@ statsRouter.get('/', (req, res) => {
     byTimeframe: groupPerformance(trades, (t) => t.timeframe, 'timeframe'),
     byPlaybook: groupPerformance(trades, (t) => t.playbook_name, 'playbook'),
     byGrade: groupPerformance(trades, (t) => t.execution_grade, 'grade'),
+    byRating: groupPerformance(trades, (t) => t.trade_rating, 'rating'),
     byEmotion: groupPerformance(trades, (t) => t.emotional_state, 'emotion'),
     byDayOfWeek: groupPerformance(
       trades,

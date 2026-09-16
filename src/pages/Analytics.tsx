@@ -3,7 +3,7 @@ import { api } from '@/lib/api'
 import { useAsync, useStored } from '@/lib/hooks'
 import { money, pct, rMultiple, ratio, pnlClass, compactMoney } from '@/lib/format'
 import type { Trade } from '@/lib/types'
-import { CLOSE_METHOD_LABELS } from '@/lib/instruments'
+import { CLOSE_METHOD_LABELS, GRADES } from '@/lib/instruments'
 import type { Bucket, Stats } from '@/lib/types'
 import { PageHeader } from '@/components/Layout'
 import { Card, CardHeader, Spinner, ErrorNote, Segmented, EmptyState } from '@/components/ui'
@@ -141,6 +141,14 @@ function PremiumSelling({ trades }: { trades: Trade[] }) {
   )
 }
 
+/** Order grade buckets best to worst rather than by P&L, so the trend reads. */
+function sortByGrade(rows: Bucket[], key: string): Bucket[] {
+  const rank = new Map(GRADES.map((g, i) => [g, i]))
+  return [...rows].sort(
+    (a, b) => (rank.get(String(a[key])) ?? 99) - (rank.get(String(b[key])) ?? 99),
+  )
+}
+
 export default function Analytics() {
   const [range, setRange] = useStored('tj-analytics-range', 'all')
   const query = useMemo(() => ({ from: rangeStart(range) }), [range])
@@ -193,7 +201,13 @@ export default function Analytics() {
         {!!sells?.length && <PremiumSelling trades={sells} />}
 
         <div className="grid gap-5 xl:grid-cols-2">
-          <BreakdownTable title="By trade type" subtitle="Your playbook setups, ranked" rows={stats.bySetup} keyField="setup" />
+          <BreakdownTable title="By entry model" subtitle="Your models, ranked" rows={stats.bySetup} keyField="setup" />
+          <BreakdownTable
+            title="By setup rating"
+            subtitle="Does your own read on setup quality predict the result?"
+            rows={sortByGrade(stats.byRating, 'rating')}
+            keyField="rating"
+          />
           <BreakdownTable title="By trade style" subtitle="Day trading vs swing trading" rows={stats.byStyle} keyField="style" />
           <BreakdownTable title="By instrument type" rows={stats.byAssetClass} keyField="assetClass" />
           <BreakdownTable title="Options: buying vs selling premium" rows={stats.byOptionSide} keyField="side" />
@@ -203,7 +217,12 @@ export default function Analytics() {
           <BreakdownTable title="By timeframe" rows={stats.byTimeframe} keyField="timeframe" />
           <BreakdownTable title="By direction" rows={stats.byDirection} keyField="direction" />
           <BreakdownTable title="By source" rows={stats.bySource} keyField="source" />
-          <BreakdownTable title="By execution grade" subtitle="Does your own grading predict results?" rows={stats.byGrade} keyField="grade" />
+          <BreakdownTable
+            title="By execution grade"
+            subtitle="What sloppy execution actually costs you"
+            rows={sortByGrade(stats.byGrade, 'grade')}
+            keyField="grade"
+          />
           <BreakdownTable title="By emotional state" subtitle="What your state of mind is worth" rows={stats.byEmotion} keyField="emotion" />
           <BreakdownTable title="By mistake tag" subtitle="Cost of each recurring mistake" rows={stats.byMistake} keyField="mistake" />
           <BreakdownTable title="By playbook" rows={stats.byPlaybook} keyField="playbook" />

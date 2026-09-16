@@ -116,6 +116,7 @@ export interface Trade {
   pct_of_max_profit: number | null
 
   execution_grade: string | null
+  trade_rating: string | null
   emotional_state: string | null
   thesis: string | null
   notes: string | null
@@ -172,7 +173,7 @@ export interface Stats {
   rulePerformance: RulePerf[]
   bySetup: Bucket[]; byStyle: Bucket[]; byAssetClass: Bucket[]; byOptionSide: Bucket[]
   bySource: Bucket[]; bySession: Bucket[]; bySymbol: Bucket[]; byDirection: Bucket[]
-  byTimeframe: Bucket[]; byPlaybook: Bucket[]; byGrade: Bucket[]; byEmotion: Bucket[]
+  byTimeframe: Bucket[]; byPlaybook: Bucket[]; byGrade: Bucket[]; byRating: Bucket[]; byEmotion: Bucket[]
   byDayOfWeek: Bucket[]; byMistake: Bucket[]
 }
 
