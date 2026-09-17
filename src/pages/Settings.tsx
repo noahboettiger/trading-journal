@@ -7,18 +7,30 @@ import type { Playbook, Rule, LookupKind } from '@/lib/types'
 import { PageHeader } from '@/components/Layout'
 import { Card, CardHeader, Input, Select, Spinner, ErrorNote, Badge, Segmented } from '@/components/ui'
 
+// Hints say what the list is for rather than naming examples, which would go
+// stale the moment the list is reordered or edited.
 const LIST_KINDS: { kind: LookupKind; label: string; hint: string }[] = [
-  { kind: 'setup', label: 'Entry models', hint: 'Freestyle, iFVG Reversal, Mech Model, 2022 Model...' },
-  { kind: 'style', label: 'Trade styles', hint: 'Day Trade, Swing Trade, Scalp...' },
-  { kind: 'session', label: 'Sessions', hint: 'Asia, London, NY AM...' },
-  { kind: 'source', label: 'Sources', hint: 'Prop, Personal, Eval...' },
-  { kind: 'emotion', label: 'Emotional states', hint: 'Calm, FOMO, Frustrated...' },
-  { kind: 'timeframe', label: 'Timeframes', hint: '1m, 5m, 15m...' },
+  { kind: 'setup', label: 'Entry models', hint: 'The setups you trade' },
+  { kind: 'style', label: 'Trade styles', hint: 'How long you hold' },
+  { kind: 'session', label: 'Sessions', hint: 'When the trade was taken' },
+  { kind: 'source', label: 'Sources', hint: 'Which account or funding the trade sits in' },
+  { kind: 'emotion', label: 'Emotional states', hint: 'How you felt, multi-select on a trade' },
+  { kind: 'timeframe', label: 'Timeframes', hint: 'Chart timeframes you enter from' },
 ]
 
 function ListEditor({ kind, label, hint, reference }: { kind: LookupKind; label: string; hint: string; reference: ReturnType<typeof useReference> }) {
   const [draft, setDraft] = useState('')
-  const items = reference.lookups[kind] ?? []
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const serverItems = reference.lookups[kind] ?? []
+  // Local copy so a drag can reorder instantly; the server call follows on drop.
+  const [items, setItems] = useState(serverItems)
+  const signature = serverItems.map((i) => `${i.id}:${i.value}`).join('|')
+  useEffect(() => {
+    setItems(serverItems)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature])
 
   const add = async () => {
     const value = draft.trim()
@@ -28,19 +40,87 @@ function ListEditor({ kind, label, hint, reference }: { kind: LookupKind; label:
     reference.reload()
   }
 
+  const persist = async (next: typeof items) => {
+    setSaving(true)
+    try {
+      await api.lookups.reorder(kind, next.map((i) => i.id))
+      await reference.reload()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  /** Move an entry to a new position, returning the reordered list. */
+  const move = (from: number, to: number) => {
+    if (to < 0 || to >= items.length || from === to) return null
+    const next = [...items]
+    const [moved] = next.splice(from, 1)
+    next.splice(to, 0, moved)
+    setItems(next)
+    return next
+  }
+
+  const nudge = (index: number, delta: number) => {
+    const next = move(index, index + delta)
+    if (next) persist(next)
+  }
+
   return (
     <Card>
-      <CardHeader title={label} subtitle={hint} right={<Badge>{items.length}</Badge>} />
+      <CardHeader
+        title={label}
+        subtitle={hint}
+        right={saving ? <span className="text-[11px] text-ink-faint">Saving...</span> : <Badge>{items.length}</Badge>}
+      />
       <div className="p-4">
         <div className="flex flex-wrap gap-1.5">
-          {items.map((item) => (
-            <span key={item.id} className="chip group !pr-1.5">
+          {items.map((item, index) => (
+            <span
+              key={item.id}
+              draggable
+              tabIndex={0}
+              onDragStart={(e) => {
+                setDragIndex(index)
+                e.dataTransfer.effectAllowed = 'move'
+                // Firefox refuses to start a drag without payload.
+                e.dataTransfer.setData('text/plain', String(item.id))
+              }}
+              onDragOver={(e) => {
+                e.preventDefault()
+                e.dataTransfer.dropEffect = 'move'
+                if (dragIndex === null || dragIndex === index) return
+                move(dragIndex, index)
+                setDragIndex(index)
+              }}
+              onDrop={(e) => e.preventDefault()}
+              onDragEnd={() => {
+                setDragIndex(null)
+                persist(items)
+              }}
+              onKeyDown={(e) => {
+                // Keyboard equivalent, and easier than dragging for one step.
+                if (!e.altKey) return
+                if (e.key === 'ArrowLeft') {
+                  e.preventDefault()
+                  nudge(index, -1)
+                } else if (e.key === 'ArrowRight') {
+                  e.preventDefault()
+                  nudge(index, 1)
+                }
+              }}
+              title="Drag to reorder, or focus and press Alt with the arrow keys"
+              className={`chip !pr-1.5 cursor-grab select-none active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-accent/40 ${
+                dragIndex === index ? 'opacity-40' : ''
+              }`}
+            >
+              <GripVertical size={11} className="shrink-0 text-ink-faint" />
               {item.value}
               <button
                 onClick={async () => {
                   await api.lookups.remove(item.id)
                   reference.reload()
                 }}
+                draggable={false}
                 aria-label={`Remove ${item.value}`}
                 className="rounded p-0.5 text-ink-faint transition hover:bg-loss/15 hover:text-loss"
               >
@@ -50,6 +130,13 @@ function ListEditor({ kind, label, hint, reference }: { kind: LookupKind; label:
           ))}
           {!items.length && <span className="text-xs text-ink-faint">Nothing in this list yet.</span>}
         </div>
+
+        {items.length > 1 && (
+          <p className="mt-2.5 text-[11px] text-ink-faint">
+            Drag to reorder. The order here is the order on the trade form.
+          </p>
+        )}
+
         <div className="mt-3 flex gap-2">
           <Input
             value={draft}

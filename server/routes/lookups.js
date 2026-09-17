@@ -31,6 +31,33 @@ lookupsRouter.post('/', (req, res, next) => {
   }
 })
 
+/**
+ * Persist a whole list's order in one write. Registered before '/:id' because
+ * Express matches in order and would otherwise read "reorder" as an id.
+ */
+lookupsRouter.put('/reorder', (req, res, next) => {
+  const { kind, ids } = req.body
+  if (!kind || !Array.isArray(ids)) {
+    return res.status(400).json({ error: 'kind and ids are required' })
+  }
+
+  db.exec('BEGIN')
+  try {
+    const stmt = db.prepare('UPDATE lookups SET sort_order = ? WHERE id = ? AND kind = ?')
+    ids.forEach((id, index) => {
+      const n = num(id)
+      if (n !== null) stmt.run(index, n, kind)
+    })
+    db.exec('COMMIT')
+    res.json(
+      db.prepare('SELECT * FROM lookups WHERE kind = ? ORDER BY sort_order, value').all(kind),
+    )
+  } catch (err) {
+    db.exec('ROLLBACK')
+    next(err)
+  }
+})
+
 lookupsRouter.put('/:id', (req, res, next) => {
   try {
     const fields = ['value', 'asset_class', 'sort_order', 'is_active'].filter((f) => f in req.body)

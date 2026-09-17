@@ -39,6 +39,8 @@ export const api = {
     create: (body: unknown) => req<Lookup>('/api/lookups', { method: 'POST', body: JSON.stringify(body) }),
     update: (id: number, body: unknown) => req<Lookup>(`/api/lookups/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
     remove: (id: number) => req<void>(`/api/lookups/${id}`, { method: 'DELETE' }),
+    reorder: (kind: string, ids: number[]) =>
+      req<Lookup[]>('/api/lookups/reorder', { method: 'PUT', body: JSON.stringify({ kind, ids }) }),
   },
   playbooks: {
     list: () => req<Playbook[]>('/api/playbooks'),
