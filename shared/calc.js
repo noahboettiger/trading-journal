@@ -132,8 +132,10 @@ const mean = (xs) => (xs.length ? sum(xs) / xs.length : null)
  * Aggregate performance over a set of enriched trades (each already carrying
  * net_pnl, result_r and outcome).
  */
+export const isRealised = (t) => t.status === 'closed' && num(t.net_pnl) !== null
+
 export function summarise(trades) {
-  const closed = trades.filter((t) => t.status !== 'planned' && num(t.net_pnl) !== null)
+  const closed = trades.filter(isRealised)
   const pnls = closed.map((t) => num(t.net_pnl))
   const wins = closed.filter((t) => t.outcome === 'win')
   const losses = closed.filter((t) => t.outcome === 'loss')
@@ -193,8 +195,8 @@ export function summarise(trades) {
 export function dailyRollup(trades) {
   const byDay = new Map()
   for (const t of trades) {
+    if (!isRealised(t)) continue
     const net = num(t.net_pnl)
-    if (net === null || t.status === 'planned') continue
     const key = String(t.trade_date).slice(0, 10)
     if (!byDay.has(key)) byDay.set(key, { date: key, pnl: 0, trades: 0, wins: 0, losses: 0, r: 0 })
     const d = byDay.get(key)
@@ -212,7 +214,7 @@ export function dailyRollup(trades) {
 /** Running equity from a starting balance, ordered by date then trade number. */
 export function equityCurve(trades, startingBalance = 0) {
   const ordered = [...trades]
-    .filter((t) => num(t.net_pnl) !== null && t.status !== 'planned')
+    .filter(isRealised)
     .sort((a, b) =>
       a.trade_date === b.trade_date ? a.trade_no - b.trade_no : a.trade_date.localeCompare(b.trade_date),
     )
@@ -310,8 +312,8 @@ export function weekKey(iso) {
 export function weeklyRollup(trades) {
   const byWeek = new Map()
   for (const t of trades) {
+    if (!isRealised(t)) continue
     const net = num(t.net_pnl)
-    if (net === null || t.status === 'planned') continue
     const wk = weekKey(t.trade_date)
     if (!wk) continue
     if (!byWeek.has(wk.key)) {
@@ -333,8 +335,8 @@ export function weeklyRollup(trades) {
 export function monthlyRollup(trades) {
   const byMonth = new Map()
   for (const t of trades) {
+    if (!isRealised(t)) continue
     const net = num(t.net_pnl)
-    if (net === null || t.status === 'planned') continue
     const key = String(t.trade_date).slice(0, 7)
     if (!byMonth.has(key)) byMonth.set(key, { month: key, pnl: 0, trades: 0, wins: 0, losses: 0, r: 0 })
     const m = byMonth.get(key)
@@ -423,3 +425,14 @@ export const parseMulti = (value) =>
     .filter(Boolean)
 
 export const joinMulti = (values) => (Array.isArray(values) ? values : parseMulti(values)).join(', ')
+
+
+/** What is still live: count, capital tied up and credit already taken in. */
+export function openPositions(trades) {
+  const open = trades.filter((t) => t.status === 'open')
+  return {
+    count: open.length,
+    collateral: open.reduce((a, t) => a + (collateralRequired(t) ?? num(t.risk_amount) ?? 0), 0),
+    credit: open.reduce((a, t) => a + (creditReceived(t) ?? 0), 0),
+  }
+}

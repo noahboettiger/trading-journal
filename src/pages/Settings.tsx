@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Plus, Trash2, GripVertical, Save, Download, Upload, AlertTriangle, DatabaseBackup } from 'lucide-react'
+import { Plus, Trash2, GripVertical, Save, Download, Upload, AlertTriangle, DatabaseBackup, Book } from 'lucide-react'
 
 import { api } from '@/lib/api'
 import { useReference } from '@/lib/hooks'
-import type { Playbook, Rule, LookupKind } from '@/lib/types'
+import type { Playbook, Rule, LookupKind, Journal } from '@/lib/types'
+import { useJournal } from '@/lib/journals'
 import { PageHeader } from '@/components/Layout'
-import { Card, CardHeader, Input, Select, Spinner, ErrorNote, Badge, Segmented } from '@/components/ui'
+import { Card, CardHeader, Field, Input, Select, Spinner, ErrorNote, Badge, Segmented } from '@/components/ui'
 
 // Hints say what the list is for rather than naming examples, which would go
 // stale the moment the list is reordered or edited.
@@ -146,6 +147,126 @@ function ListEditor({ kind, label, hint, reference }: { kind: LookupKind; label:
           />
           <button className="btn-ghost" onClick={add} disabled={!draft.trim()}><Plus size={15} /></button>
         </div>
+      </div>
+    </Card>
+  )
+}
+
+const JOURNAL_KINDS = [
+  { value: 'futures_day', label: 'Futures day trading' },
+  { value: 'options_swing', label: 'Options swing trading' },
+  { value: 'options_csp', label: 'Cash-secured puts' },
+  { value: 'general', label: 'General' },
+]
+
+/**
+ * Journals are separate books. Each holds its own trades and its own numbers,
+ * so a long premium-selling position never distorts a day-trading win rate.
+ */
+function JournalsEditor({ playbooks }: { playbooks: Playbook[] }) {
+  const { journals, journalId, setJournalId, reload } = useJournal()
+  const [error, setError] = useState<unknown>(null)
+  const [busy, setBusy] = useState(false)
+
+  const patch = async (j: Journal, body: Partial<Journal>) => {
+    setError(null)
+    setBusy(true)
+    try {
+      await api.journals.update(j.id, body)
+      await reload()
+    } catch (e) {
+      setError(e)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const remove = async (j: Journal) => {
+    if (!confirm(`Delete the "${j.name}" journal?`)) return
+    setError(null)
+    try {
+      await api.journals.remove(j.id)
+      await reload()
+    } catch (e) {
+      setError(e)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader
+        title="Journals"
+        subtitle="Separate books, each with its own trades, dashboard and analytics"
+        icon={<Book size={15} />}
+        right={busy ? <span className="text-[11px] text-ink-faint">Saving...</span> : <Badge>{journals.length}</Badge>}
+      />
+      <div className="space-y-3 p-4">
+        <ErrorNote error={error} />
+        {journals.map((j) => (
+          <div
+            key={j.id}
+            className={`rounded-lg border p-3 ${j.id === journalId ? 'border-accent/45 bg-accent/5' : 'border-line bg-surface-2/40'}`}
+          >
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto]">
+              <Field label="Name">
+                <Input
+                  defaultValue={j.name}
+                  onBlur={(e) => e.target.value.trim() && e.target.value !== j.name && patch(j, { name: e.target.value.trim() })}
+                />
+              </Field>
+              <Field label="Kind" hint="Shapes the dashboard">
+                <Select value={j.kind} options={JOURNAL_KINDS} onChange={(e) => patch(j, { kind: e.target.value as Journal['kind'] })} />
+              </Field>
+              <Field label="Default rule set">
+                <Select
+                  value={String(j.default_playbook_id ?? '')}
+                  options={playbooks.map((p) => ({ value: String(p.id), label: p.name }))}
+                  placeholder="None"
+                  onChange={(e) => patch(j, { default_playbook_id: e.target.value ? Number(e.target.value) : null })}
+                />
+              </Field>
+              <div className="flex items-end gap-2 pb-0.5">
+                {j.id !== journalId && (
+                  <button className="btn-ghost !py-1.5" onClick={() => setJournalId(j.id)}>Open</button>
+                )}
+                <button
+                  className="rounded p-2 text-ink-faint transition hover:bg-loss/15 hover:text-loss"
+                  onClick={() => remove(j)}
+                  aria-label={`Delete ${j.name}`}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+            <p className="mt-1 text-[11px] text-ink-faint">
+              {j.trade_count} trade{j.trade_count === 1 ? '' : 's'}
+              {j.id === journalId && ' · currently open'}
+            </p>
+          </div>
+        ))}
+
+        <button
+          className="btn-ghost w-full"
+          onClick={async () => {
+            const name = prompt('Name this journal')
+            if (!name?.trim()) return
+            setError(null)
+            try {
+              const created = await api.journals.create({ name: name.trim(), kind: 'general' })
+              await reload()
+              setJournalId(created.id)
+            } catch (e) {
+              setError(e)
+            }
+          }}
+        >
+          <Plus size={15} /> New journal
+        </button>
+
+        <p className="text-[11px] leading-relaxed text-ink-faint">
+          A journal holding trades cannot be deleted. Move those trades to another journal from the trade form first,
+          which keeps the record rather than quietly detaching it.
+        </p>
       </div>
     </Card>
   )
@@ -331,7 +452,7 @@ function DataSection({ onRestored }: { onRestored: () => void }) {
 
 export default function Settings() {
   const reference = useReference()
-  const [tab, setTab] = useState<'rules' | 'lists' | 'data'>('rules')
+  const [tab, setTab] = useState<'journals' | 'rules' | 'lists' | 'data'>('journals')
   const [activePlaybook, setActivePlaybook] = useState<number | null>(null)
 
   useEffect(() => {
@@ -346,12 +467,13 @@ export default function Settings() {
     <>
       <PageHeader
         title="Settings"
-        subtitle="Rules, dropdown lists and your data"
+        subtitle="Journals, rules, dropdown lists and your data"
         actions={
           <Segmented
             value={tab}
             onChange={setTab}
             options={[
+              { value: 'journals', label: 'Journals' },
               { value: 'rules', label: 'Rules' },
               { value: 'lists', label: 'Lists' },
               { value: 'data', label: 'Data' },
@@ -361,6 +483,8 @@ export default function Settings() {
       />
 
       <div className="space-y-5 px-4 py-5 lg:px-7">
+        {tab === 'journals' && <JournalsEditor playbooks={reference.playbooks} />}
+
         {tab === 'rules' && (
           <>
             <div className="flex flex-wrap gap-2">

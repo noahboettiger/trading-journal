@@ -8,6 +8,7 @@ import type { Bucket, Stats } from '@/lib/types'
 import { PageHeader } from '@/components/Layout'
 import { Card, CardHeader, Spinner, ErrorNote, Segmented, EmptyState } from '@/components/ui'
 import { rangeStart } from './Trades'
+import { useJournal } from '@/lib/journals'
 
 const RANGES = [
   { value: 'all', label: 'All' },
@@ -151,10 +152,20 @@ function sortByGrade(rows: Bucket[], key: string): Bucket[] {
 
 export default function Analytics() {
   const [range, setRange] = useStored('tj-analytics-range', 'all')
-  const query = useMemo(() => ({ from: rangeStart(range) }), [range])
-  const { data: stats, loading, error } = useAsync<Stats>(() => api.stats(query), [JSON.stringify(query)])
+  const { journalId, journal } = useJournal()
+  const query = useMemo(
+    () => ({ from: rangeStart(range), journal_id: journalId ?? undefined }),
+    [range, journalId],
+  )
+  const { data: stats, loading, error } = useAsync<Stats>(
+    () => (journalId === null ? Promise.resolve(null as unknown as Stats) : api.stats(query)),
+    [JSON.stringify(query)],
+  )
   const { data: sells } = useAsync<Trade[]>(
-    () => api.trades.list({ ...query, asset_class: 'options', option_side: 'sell' }),
+    () =>
+      journalId === null
+        ? Promise.resolve([])
+        : api.trades.list({ ...query, asset_class: 'options', option_side: 'sell' }),
     [JSON.stringify(query)],
   )
 
@@ -163,7 +174,7 @@ export default function Analytics() {
   if (!stats?.summary.trades) {
     return (
       <>
-        <PageHeader title="Analytics" />
+        <PageHeader title={journal ? `${journal.name} analytics` : 'Analytics'} />
         <div className="p-4 lg:p-7">
           <Card><EmptyState title="No trades to analyse" body="Once you have logged a few trades, this page breaks them down every way that matters." /></Card>
         </div>
@@ -176,7 +187,7 @@ export default function Analytics() {
   return (
     <>
       <PageHeader
-        title="Analytics"
+        title={journal ? `${journal.name} analytics` : 'Analytics'}
         subtitle="Where the money actually comes from"
         actions={<Segmented value={range} onChange={setRange} options={RANGES} />}
       />

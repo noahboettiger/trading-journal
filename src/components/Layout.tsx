@@ -2,9 +2,10 @@ import { type ReactNode, useEffect, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, ListOrdered, CalendarDays, ChartNoAxesCombined,
-  NotebookPen, Settings as SettingsIcon, Plus, Moon, Sun, LineChart,
+  NotebookPen, Settings as SettingsIcon, Plus, Moon, Sun,
 } from 'lucide-react'
 import { titleCase } from '@/lib/format'
+import { JournalSwitcher } from './JournalSwitcher'
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -39,12 +40,9 @@ export function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen lg:flex">
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex lg:w-56 lg:shrink-0 lg:flex-col lg:border-r lg:border-line lg:bg-surface-1">
-        <div className="flex items-center gap-2.5 px-5 py-5">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-surface-0">
-            <LineChart size={17} strokeWidth={2.5} />
-          </span>
-          <span className="text-sm font-semibold tracking-tight">Trading Journal</span>
+      <aside className="hidden lg:flex lg:w-60 lg:shrink-0 lg:flex-col lg:border-r lg:border-line lg:bg-surface-1">
+        <div className="px-3 py-4">
+          <JournalSwitcher />
         </div>
 
         <nav className="flex-1 space-y-0.5 px-3">
@@ -78,11 +76,8 @@ export function Layout({ children }: { children: ReactNode }) {
 
       {/* Mobile header */}
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-line bg-surface-1/95 px-4 py-3 backdrop-blur lg:hidden">
-        <div className="flex items-center gap-2">
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-accent text-surface-0">
-            <LineChart size={15} strokeWidth={2.5} />
-          </span>
-          <span className="text-sm font-semibold">Trading Journal</span>
+        <div className="min-w-0 max-w-[62%]">
+          <JournalSwitcher compact />
         </div>
         <button className="btn-subtle !px-2" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
           {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}

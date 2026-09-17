@@ -6,13 +6,21 @@ import type { Stats } from '@/lib/types'
 import { PageHeader } from '@/components/Layout'
 import { Card, CardHeader, Spinner, ErrorNote, Segmented } from '@/components/ui'
 import { PnlCalendar } from '@/components/PnlCalendar'
+import { useJournal } from '@/lib/journals'
 
 type Grain = 'day' | 'week' | 'month'
 
 export default function CalendarPage() {
   const [month, setMonth] = useState(() => new Date())
   const [grain, setGrain] = useState<Grain>('day')
-  const { data: stats, loading, error } = useAsync<Stats>(() => api.stats(), [])
+  const { journalId, journal } = useJournal()
+  const { data: stats, loading, error } = useAsync<Stats>(
+    () =>
+      journalId === null
+        ? Promise.resolve(null as unknown as Stats)
+        : api.stats({ journal_id: journalId }),
+    [journalId],
+  )
 
   const rows = useMemo(() => {
     if (!stats) return []
@@ -42,7 +50,10 @@ export default function CalendarPage() {
 
   return (
     <>
-      <PageHeader title="Calendar" subtitle="Daily results rolled into weeks and months" />
+      <PageHeader
+        title={journal ? `${journal.name} calendar` : 'Calendar'}
+        subtitle="Daily results rolled into weeks and months"
+      />
       <div className="space-y-5 px-4 py-5 lg:px-7">
         <Card>
           <PnlCalendar month={month} onMonthChange={setMonth} days={stats?.daily ?? []} />

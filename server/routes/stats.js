@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { listTrades } from '../lib/trades.js'
 import {
   summarise, dailyRollup, weeklyRollup, monthlyRollup, equityCurve, groupPerformance, ruleCompliance,
-  parseMulti,
+  parseMulti, openPositions,
 } from '../../shared/calc.js'
 
 export const statsRouter = Router()
@@ -76,6 +76,7 @@ statsRouter.get('/', (req, res) => {
 
   res.json({
     summary: { ...summarise(trades), maxDrawdown },
+    open: openPositions(trades),
     daily: dailyRollup(trades),
     weekly: weeklyRollup(trades),
     monthly: monthlyRollup(trades),

@@ -10,6 +10,7 @@ import { UPLOAD_DIR, DATA_DIR as DATA_DIR_FOR_PID, db } from './lib/db.js'
 import { seedIfEmpty } from './lib/seed.js'
 import { tradesRouter } from './routes/trades.js'
 import { lookupsRouter } from './routes/lookups.js'
+import { journalsRouter } from './routes/journals.js'
 import { playbooksRouter } from './routes/playbooks.js'
 import { tagsRouter } from './routes/tags.js'
 import { statsRouter } from './routes/stats.js'
@@ -30,6 +31,7 @@ app.get('/api/health', (_req, res) =>
 )
 app.use('/api/trades', tradesRouter)
 app.use('/api/lookups', lookupsRouter)
+app.use('/api/journals', journalsRouter)
 app.use('/api/playbooks', playbooksRouter)
 app.use('/api/tags', tagsRouter)
 app.use('/api/stats', statsRouter)

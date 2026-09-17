@@ -3,7 +3,7 @@ import path from 'node:path'
 import { db, DATA_DIR } from './db.js'
 
 const TABLES = [
-  'lookups', 'playbooks', 'rules', 'trades',
+  'lookups', 'journals', 'playbooks', 'rules', 'trades',
   'trade_rule_checks', 'trade_tags', 'trade_images', 'tags', 'journal_entries',
 ]
 

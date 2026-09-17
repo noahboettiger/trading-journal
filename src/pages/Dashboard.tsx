@@ -3,16 +3,17 @@ import { Link } from 'react-router-dom'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, Cell, ReferenceLine,
 } from 'recharts'
-import { Plus, TrendingUp, Percent, Scale, Target, ShieldCheck, Flame } from 'lucide-react'
+import { Plus, TrendingUp, Percent, Scale, Target, ShieldCheck, Flame, DollarSign, Timer, CircleDot } from 'lucide-react'
 
 import { api } from '@/lib/api'
 import { useAsync, useStored } from '@/lib/hooks'
 import { money, compactMoney, pct, ratio, rMultiple, formatDay, pnlClass } from '@/lib/format'
-import type { Stats } from '@/lib/types'
+import type { Stats, Trade } from '@/lib/types'
 import { PageHeader } from '@/components/Layout'
 import { Card, CardHeader, Stat, PnlStat, Spinner, ErrorNote, EmptyState, Segmented, Badge } from '@/components/ui'
 import { PnlCalendar } from '@/components/PnlCalendar'
 import { rangeStart } from './Trades'
+import { useJournal, isPremiumSelling } from '@/lib/journals'
 
 const RANGES = [
   { value: 'all', label: 'All' },
@@ -38,12 +39,42 @@ function ChartTooltip({ active, payload, label, valueKey = 'equity', prefix = ''
 export default function Dashboard() {
   const [range, setRange] = useStored('tj-dash-range', 'all')
   const [month, setMonth] = useState(() => new Date())
+  const { journalId, journal } = useJournal()
 
-  const query = useMemo(() => ({ from: rangeStart(range) }), [range])
-  const { data: stats, loading, error } = useAsync<Stats>(() => api.stats(query), [JSON.stringify(query)])
+  const query = useMemo(() => ({ from: rangeStart(range), journal_id: journalId ?? undefined }), [range, journalId])
+  const { data: stats, loading, error } = useAsync<Stats>(
+    () => (journalId === null ? Promise.resolve(null as unknown as Stats) : api.stats(query)),
+    [JSON.stringify(query)],
+  )
 
   const s = stats?.summary
   const compliance = stats?.compliance
+
+  // Kept above the early returns below: hooks cannot run conditionally.
+  const { data: positions } = useAsync<Trade[]>(
+    () => (journalId === null ? Promise.resolve([]) : api.trades.list({ ...query, withChildren: false })),
+    [JSON.stringify(query)],
+  )
+
+  /** Collateral-based figures, only meaningful for a premium-selling journal. */
+  const csp = useMemo(() => {
+    const closed = (positions ?? []).filter((t) => t.net_pnl !== null)
+    const withCollateral = closed.filter((t) => t.collateral_required)
+    const collateral = withCollateral.reduce((a, t) => a + (t.collateral_required ?? 0), 0)
+    const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null)
+    return {
+      credit: closed.reduce((a, t) => a + (t.credit_received ?? 0), 0),
+      collateral,
+      avgReturn: mean(withCollateral.map((t) => t.return_on_collateral ?? 0)),
+      // Weighted by capital, so a large position counts for more than a small one.
+      annualised: collateral
+        ? withCollateral.reduce((a, t) => a + (t.annualised_return ?? 0) * (t.collateral_required ?? 0), 0) / collateral
+        : null,
+      avgHeld: mean(closed.map((t) => t.days_held ?? 0)),
+      captured: mean(closed.filter((t) => t.pct_of_max_profit !== null).map((t) => t.pct_of_max_profit as number)),
+      assigned: closed.filter((t) => t.close_method === 'assigned').length,
+    }
+  }, [positions])
 
   const curve = useMemo(
     () =>
@@ -72,7 +103,7 @@ export default function Dashboard() {
   if (!s?.trades) {
     return (
       <>
-        <PageHeader title="Dashboard" />
+        <PageHeader title={journal?.name ?? 'Dashboard'} subtitle="Nothing logged in this journal yet" />
         <div className="p-4 lg:p-7">
           <Card>
             <EmptyState
@@ -87,27 +118,47 @@ export default function Dashboard() {
     )
   }
 
-  const complianceEdge =
-    compliance && compliance.compliant.count && compliance.nonCompliant.count
-      ? (compliance.compliant.avgR ?? 0) - (compliance.nonCompliant.avgR ?? 0)
-      : null
+  const premiumSelling = isPremiumSelling(journal)
+  const openInfo = stats?.open ?? { count: 0, collateral: 0, credit: 0 }
 
-  return (
-    <>
-      <PageHeader
-        title="Dashboard"
-        subtitle={`${s.trades} trades · ${s.wins}W / ${s.losses}L`}
-        actions={
-          <>
-            <Segmented value={range} onChange={setRange} options={RANGES} />
-            <Link className="btn-primary" to="/trades/new"><Plus size={15} /> Log trade</Link>
-          </>
-        }
-      />
-
-      <div className="space-y-5 px-4 py-5 lg:px-7">
-        {/* KPI row */}
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7">
+  const kpis = premiumSelling
+    ? (
+        <>
+          <PnlStat label="Net P&L" value={s.netPnl} sub={`${s.trades} positions`} icon={<TrendingUp size={14} />} />
+          <Stat label="Credit taken in" value={compactMoney(csp.credit)} sub={`${s.trades} sold`} icon={<DollarSign size={14} />} />
+          <Stat
+            label="Return on collateral"
+            value={pct(csp.avgReturn, 2)}
+            sub={`${compactMoney(csp.collateral)} deployed`}
+            tone={(csp.avgReturn ?? 0) >= 0 ? 'good' : 'bad'}
+            icon={<Percent size={14} />}
+          />
+          <Stat
+            label="Annualised"
+            value={pct(csp.annualised, 1)}
+            sub="capital weighted"
+            tone={(csp.annualised ?? 0) >= 0 ? 'good' : 'bad'}
+            icon={<Timer size={14} />}
+          />
+          <Stat label="Avg days held" value={csp.avgHeld === null ? '--' : `${csp.avgHeld.toFixed(0)}d`} sub="per position" icon={<Timer size={14} />} />
+          <Stat
+            label="Max profit captured"
+            value={pct(csp.captured, 0)}
+            sub="target 50-60%"
+            tone={(csp.captured ?? 0) >= 50 ? 'good' : 'neutral'}
+            icon={<Target size={14} />}
+          />
+          <Stat
+            label="Assigned"
+            value={`${csp.assigned}`}
+            sub={`of ${s.trades} closed`}
+            tone={csp.assigned > 0 ? 'bad' : 'good'}
+            icon={<Scale size={14} />}
+          />
+        </>
+      )
+    : (
+        <>
           <PnlStat label="Net P&L" value={s.netPnl} sub={`${s.trades} trades`} icon={<TrendingUp size={14} />} />
           <Stat label="Win rate" value={pct(s.winRate, 0)} sub={`${s.wins}W / ${s.losses}L`} icon={<Percent size={14} />} />
           <Stat label="Profit factor" value={ratio(s.profitFactor)} sub={`${compactMoney(s.grossWin)} / ${compactMoney(-s.grossLoss)}`} icon={<Scale size={14} />}
@@ -119,7 +170,56 @@ export default function Dashboard() {
           <Stat label="Streak" value={s.currentStreak === 0 ? '--' : `${Math.abs(s.currentStreak)}${s.currentStreak > 0 ? 'W' : 'L'}`}
             sub={`Best ${s.longestWinStreak}W · worst ${s.longestLossStreak}L`} icon={<Flame size={14} />}
             tone={s.currentStreak > 0 ? 'good' : s.currentStreak < 0 ? 'bad' : 'neutral'} />
-        </div>
+        </>
+      )
+
+  const complianceEdge =
+    compliance && compliance.compliant.count && compliance.nonCompliant.count
+      ? (compliance.compliant.avgR ?? 0) - (compliance.nonCompliant.avgR ?? 0)
+      : null
+
+  return (
+    <>
+      <PageHeader
+        title={journal?.name ?? 'Dashboard'}
+        subtitle={[
+          `${s.trades} closed · ${s.wins}W / ${s.losses}L`,
+          openInfo.count ? `${openInfo.count} still open` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+        actions={
+          <>
+            <Segmented value={range} onChange={setRange} options={RANGES} />
+            <Link className="btn-primary" to="/trades/new"><Plus size={15} /> Log trade</Link>
+          </>
+        }
+      />
+
+      <div className="space-y-5 px-4 py-5 lg:px-7">
+        {openInfo.count > 0 && (
+          <Link
+            to="/trades"
+            className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl2 border border-accent/30 bg-accent/5 px-5 py-3.5 transition hover:bg-accent/10"
+          >
+            <span className="flex items-center gap-2 text-sm font-semibold text-accent">
+              <CircleDot size={15} />
+              {openInfo.count} open position{openInfo.count === 1 ? '' : 's'}
+            </span>
+            <span className="text-xs text-ink-muted tnum">
+              {compactMoney(openInfo.collateral)} capital tied up
+            </span>
+            {openInfo.credit > 0 && (
+              <span className="text-xs text-ink-muted tnum">{money(openInfo.credit)} credit taken in</span>
+            )}
+            <span className="ml-auto text-xs text-ink-faint">
+              Not counted in the figures below, which are realised only
+            </span>
+          </Link>
+        )}
+
+        {/* KPI row, shaped by what this journal is measuring */}
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7">{kpis}</div>
 
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
           {/* Equity curve */}
@@ -176,7 +276,7 @@ export default function Dashboard() {
         </Card>
 
         {/* Rule compliance */}
-        {compliance && compliance.graded > 0 && (
+        {!premiumSelling && compliance && compliance.graded > 0 && (
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
             <Card className="self-start">
               <CardHeader title="Rule compliance" icon={<ShieldCheck size={15} />} subtitle="Clean trades vs trades with a rule broken" />

@@ -35,6 +35,21 @@ export interface Playbook {
   rules: Rule[]
 }
 
+export type JournalKind = 'futures_day' | 'options_swing' | 'options_csp' | 'general'
+
+export interface Journal {
+  id: number
+  name: string
+  kind: JournalKind
+  default_asset_class: AssetClass | null
+  default_trade_style: string | null
+  default_playbook_id: number | null
+  sort_order: number
+  is_active: boolean
+  trade_count: number
+  net_pnl: number
+}
+
 export type LookupKind = 'setup' | 'style' | 'session' | 'source' | 'emotion' | 'timeframe'
 
 export interface Lookup {
@@ -54,6 +69,8 @@ export interface TradeImage { id?: number; path: string; caption: string | null;
 export interface Trade {
   id: number
   trade_no: number
+  journal_id: number | null
+  journal_name: string | null
   playbook_id: number | null
   playbook_name: string | null
 
@@ -159,8 +176,15 @@ export interface RulePerf {
   followedAvgR: number | null; brokenAvgR: number | null
 }
 
+export interface OpenSummary {
+  count: number
+  collateral: number
+  credit: number
+}
+
 export interface Stats {
   summary: Summary
+  open: OpenSummary
   daily: DayRollup[]
   weekly: WeekRollup[]
   monthly: MonthRollup[]

@@ -1,15 +1,16 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Search, SlidersHorizontal, Plus, X, Pencil } from 'lucide-react'
+import { Search, SlidersHorizontal, Plus, X, Pencil, CircleDot } from 'lucide-react'
 
 import { api } from '@/lib/api'
 import { useAsync, useDebounced, useReference, useStored } from '@/lib/hooks'
-import { money, rMultiple, formatDay, pnlClass, todayISO } from '@/lib/format'
+import { money, rMultiple, formatDay, pnlClass, compactMoney } from '@/lib/format'
 import type { Trade } from '@/lib/types'
 import { PageHeader } from '@/components/Layout'
-import { Card, Select, Input, Spinner, ErrorNote, EmptyState, Badge, Segmented } from '@/components/ui'
+import { Card, CardHeader, Select, Input, Spinner, ErrorNote, EmptyState, Badge, Segmented } from '@/components/ui'
 import { ComplianceBadge } from '@/components/RuleChecklist'
 import { GRADES } from '@/lib/instruments'
+import { useJournal } from '@/lib/journals'
 
 const RANGES = [
   { value: 'all', label: 'All time' },
@@ -19,6 +20,12 @@ const RANGES = [
   { value: 'mtd', label: 'This month' },
   { value: 'ytd', label: 'This year' },
 ]
+
+const BLANK_FILTERS = {
+  range: 'all', asset_class: 'all', trade_style: 'all', option_side: 'all',
+  setup: 'all', session: 'all', outcome: 'all', trade_source: 'all',
+  trade_rating: 'all', symbol: '',
+}
 
 /** Turn a range preset into a `from` date the API understands. */
 export function rangeStart(range: string): string | undefined {
@@ -33,50 +40,200 @@ export function rangeStart(range: string): string | undefined {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+/** Strike and expiry, for an options row. */
+function contractLabel(t: Trade) {
+  if (t.asset_class !== 'options') return null
+  const parts = [t.strike ? `${t.strike}${t.option_type?.[0]?.toUpperCase() ?? ''}` : null]
+  if (t.option_side === 'sell') parts.push('SELL')
+  return parts.filter(Boolean).join(' · ')
+}
+
+function SymbolCell({ t }: { t: Trade }) {
+  const contract = contractLabel(t)
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="font-semibold">{t.symbol}</span>
+      <span className={`text-[10px] font-bold uppercase ${t.direction === 'short' ? 'text-loss' : 'text-win'}`}>
+        {t.direction === 'short' ? 'S' : 'L'}
+      </span>
+      {contract && <span className="text-[10px] text-ink-faint">{contract}</span>}
+    </div>
+  )
+}
+
+function EditCell({ t }: { t: Trade }) {
+  return (
+    <Link
+      to={`/trades/${t.id}/edit`}
+      title={`Edit trade #${t.trade_no}`}
+      aria-label={`Edit trade #${t.trade_no}`}
+      className="inline-flex rounded-md p-1.5 text-ink-faint transition hover:bg-surface-2 hover:text-ink"
+    >
+      <Pencil size={14} />
+    </Link>
+  )
+}
+
+const TH = ({ children }: { children?: React.ReactNode }) => (
+  <th className="label whitespace-nowrap px-3 py-2.5 font-semibold">{children}</th>
+)
+const TD = ({ children, className = '' }: { children?: React.ReactNode; className?: string }) => (
+  <td className={`whitespace-nowrap px-3 py-2.5 ${className}`}>{children}</td>
+)
+
+/**
+ * Open positions and closed trades answer different questions. A live
+ * cash-secured put is about capital tied up and time left; a finished trade is
+ * about what it returned. Same rows, different columns.
+ */
+function TradeTable({ title, subtitle, trades, variant }: {
+  title?: string
+  subtitle?: string
+  trades: Trade[]
+  variant: 'open' | 'closed'
+}) {
+  if (!trades.length) return null
+  const isOpen = variant === 'open'
+
+  return (
+    <Card className="overflow-hidden">
+      {title && (
+        <CardHeader
+          title={title}
+          subtitle={subtitle}
+          icon={isOpen ? <CircleDot size={15} className="text-accent" /> : undefined}
+          right={<Badge tone={isOpen ? 'accent' : 'neutral'}>{trades.length}</Badge>}
+        />
+      )}
+      <div className="overflow-x-auto">
+        <table className={`w-full text-sm ${isOpen ? 'min-w-[900px]' : 'min-w-[1120px]'}`}>
+          <thead>
+            <tr className="border-b border-line text-left">
+              <TH>#</TH>
+              <TH>{isOpen ? 'Opened' : 'Date'}</TH>
+              <TH>Ticker</TH>
+              <TH>Style</TH>
+              <TH>Entry model</TH>
+              {isOpen ? (
+                <>
+                  <TH>Held</TH>
+                  <TH>DTE left</TH>
+                  <TH>Capital</TH>
+                  <TH>Credit</TH>
+                </>
+              ) : (
+                <>
+                  <TH>Session</TH>
+                  <TH>Rules</TH>
+                  <TH>Risk</TH>
+                  <TH>R</TH>
+                  <TH>P&L</TH>
+                  <TH>Setup</TH>
+                  <TH>Exec</TH>
+                </>
+              )}
+              <TH />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {trades.map((t) => (
+              <tr key={t.id} className="transition hover:bg-surface-2/60">
+                <TD>
+                  <Link to={`/trades/${t.id}`} className="font-semibold text-accent hover:underline tnum">#{t.trade_no}</Link>
+                </TD>
+                <TD className="text-ink-muted tnum">{formatDay(t.trade_date, { month: 'short', day: 'numeric' })}</TD>
+                <TD><SymbolCell t={t} /></TD>
+                <TD className="text-ink-muted">{t.trade_style}</TD>
+                <TD className="text-ink-muted">{t.setup ?? '--'}</TD>
+
+                {isOpen ? (
+                  <>
+                    <TD className="text-ink-muted tnum">{t.days_held === null ? '--' : `${t.days_held}d`}</TD>
+                    <TD className={`tnum ${(t.dte_exit ?? 99) <= 7 ? 'text-loss font-semibold' : 'text-ink-muted'}`}>
+                      {t.dte_exit === null ? '--' : `${t.dte_exit}d`}
+                    </TD>
+                    <TD className="text-ink-muted tnum">
+                      {compactMoney(t.collateral_required ?? t.risk_amount)}
+                    </TD>
+                    <TD className="font-semibold text-win tnum">{money(t.credit_received)}</TD>
+                  </>
+                ) : (
+                  <>
+                    <TD className="text-ink-muted">{t.session ?? '--'}</TD>
+                    <TD><ComplianceBadge checks={t.rule_checks} compact /></TD>
+                    <TD className="text-ink-muted tnum">{money(t.risk_amount)}</TD>
+                    <TD className={`font-semibold tnum ${pnlClass(t.result_r)}`}>{rMultiple(t.result_r)}</TD>
+                    <TD className={`font-semibold tnum ${pnlClass(t.net_pnl)}`}>{money(t.net_pnl, { sign: true })}</TD>
+                    <TD>{t.trade_rating ? <Badge>{t.trade_rating}</Badge> : <span className="text-ink-faint">--</span>}</TD>
+                    <TD>{t.execution_grade ? <Badge>{t.execution_grade}</Badge> : <span className="text-ink-faint">--</span>}</TD>
+                  </>
+                )}
+                <TD><EditCell t={t} /></TD>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  )
+}
+
 export default function Trades() {
   const reference = useReference()
+  const { journalId, journal } = useJournal()
   const [showFilters, setShowFilters] = useStored('tj-show-filters', false)
   const [search, setSearch] = useState('')
-  const [filters, setFilters] = useStored<Record<string, string>>('tj-trade-filters', {
-    range: 'all', asset_class: 'all', trade_style: 'all', option_side: 'all',
-    setup: 'all', session: 'all', outcome: 'all', trade_source: 'all',
-    trade_rating: 'all', symbol: '',
-  })
+  const [filters, setFilters] = useStored<Record<string, string>>('tj-trade-filters', BLANK_FILTERS)
   const debouncedSearch = useDebounced(search)
 
   const query = useMemo(
-    () => ({ ...filters, range: undefined, from: rangeStart(filters.range), search: debouncedSearch }),
-    [filters, debouncedSearch],
+    () => ({
+      ...filters,
+      range: undefined,
+      from: rangeStart(filters.range),
+      search: debouncedSearch,
+      journal_id: journalId ?? undefined,
+    }),
+    [filters, debouncedSearch, journalId],
   )
 
-  const { data: trades, loading, error } = useAsync<Trade[]>(() => api.trades.list(query), [JSON.stringify(query)])
+  const { data: trades, loading, error } = useAsync<Trade[]>(
+    () => (journalId === null ? Promise.resolve([]) : api.trades.list(query)),
+    [JSON.stringify(query)],
+  )
 
   const set = (patch: Record<string, string>) => setFilters({ ...filters, ...patch })
   const activeCount = Object.entries(filters).filter(([k, v]) => k !== 'range' && v !== 'all' && v !== '').length
-  const clear = () =>
-    setFilters({
-      range: 'all', asset_class: 'all', trade_style: 'all', option_side: 'all',
-      setup: 'all', session: 'all', outcome: 'all', trade_source: 'all',
-      trade_rating: 'all', symbol: '',
-    })
+  const clear = () => setFilters(BLANK_FILTERS)
+
+  const open = useMemo(() => (trades ?? []).filter((t) => t.status === 'open'), [trades])
+  const closed = useMemo(() => (trades ?? []).filter((t) => t.status !== 'open'), [trades])
+  const openCapital = useMemo(
+    () => open.reduce((a, t) => a + (t.collateral_required ?? t.risk_amount ?? 0), 0),
+    [open],
+  )
 
   const totals = useMemo(() => {
-    const list = trades ?? []
-    const net = list.reduce((a, t) => a + (t.net_pnl ?? 0), 0)
-    const decided = list.filter((t) => t.outcome === 'win' || t.outcome === 'loss')
+    const net = closed.reduce((a, t) => a + (t.net_pnl ?? 0), 0)
+    const decided = closed.filter((t) => t.outcome === 'win' || t.outcome === 'loss')
     const wins = decided.filter((t) => t.outcome === 'win').length
-    return { net, count: list.length, winRate: decided.length ? (wins / decided.length) * 100 : null }
-  }, [trades])
+    return { net, winRate: decided.length ? (wins / decided.length) * 100 : null }
+  }, [closed])
 
   return (
     <>
       <PageHeader
-        title="Trades"
+        title={journal ? `${journal.name} trades` : 'Trades'}
         subtitle={
           trades
-            ? `${totals.count} trade${totals.count === 1 ? '' : 's'} · net ${money(totals.net, { sign: true })}${
-                totals.winRate !== null ? ` · ${totals.winRate.toFixed(0)}% win rate` : ''
-              }`
+            ? [
+                open.length ? `${open.length} open` : null,
+                `${closed.length} closed`,
+                `net ${money(totals.net, { sign: true })}`,
+                totals.winRate !== null ? `${totals.winRate.toFixed(0)}% win rate` : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')
             : undefined
         }
         actions={
@@ -102,11 +259,7 @@ export default function Trades() {
               className="!pl-9"
             />
           </div>
-          <Segmented
-            value={filters.range}
-            onChange={(range) => set({ range })}
-            options={RANGES.map((r) => ({ value: r.value, label: r.label }))}
-          />
+          <Segmented value={filters.range} onChange={(range) => set({ range })} options={RANGES} />
         </div>
 
         {showFilters && (
@@ -157,62 +310,19 @@ export default function Trades() {
             />
           </Card>
         ) : (
-          <Card className="overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1120px] text-sm">
-                <thead>
-                  <tr className="border-b border-line text-left">
-                    {['#', 'Date', 'Ticker', 'Style', 'Entry model', 'Session', 'Rules', 'Risk', 'R', 'P&L', 'Setup', 'Exec', ''].map((h, i) => (
-                      <th key={i} className="label whitespace-nowrap px-3 py-2.5 font-semibold">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {trades.map((t) => (
-                    <tr key={t.id} className="transition hover:bg-surface-2/60">
-                      <td className="whitespace-nowrap px-3 py-2.5">
-                        <Link to={`/trades/${t.id}`} className="font-semibold text-accent hover:underline tnum">#{t.trade_no}</Link>
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-ink-muted tnum">{formatDay(t.trade_date, { month: 'short', day: 'numeric' })}</td>
-                      <td className="whitespace-nowrap px-3 py-2.5">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-semibold">{t.symbol}</span>
-                          <span className={`text-[10px] font-bold uppercase ${t.direction === 'short' ? 'text-loss' : 'text-win'}`}>
-                            {t.direction === 'short' ? 'S' : 'L'}
-                          </span>
-                          {t.asset_class === 'options' && (
-                            <span className="text-[10px] text-ink-faint">
-                              {t.strike ? `${t.strike}${t.option_type?.[0] ?? ''}` : 'OPT'}
-                              {t.option_side === 'sell' ? ' ·SELL' : ''}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-ink-muted">{t.trade_style}</td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-ink-muted">{t.setup ?? '--'}</td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-ink-muted">{t.session ?? '--'}</td>
-                      <td className="whitespace-nowrap px-3 py-2.5"><ComplianceBadge checks={t.rule_checks} compact /></td>
-                      <td className="px-4 py-2.5 text-ink-muted tnum">{money(t.risk_amount)}</td>
-                      <td className={`whitespace-nowrap px-3 py-2.5 font-semibold tnum ${pnlClass(t.result_r)}`}>{rMultiple(t.result_r)}</td>
-                      <td className={`whitespace-nowrap px-3 py-2.5 font-semibold tnum ${pnlClass(t.net_pnl)}`}>{money(t.net_pnl, { sign: true })}</td>
-                      <td className="whitespace-nowrap px-3 py-2.5">{t.trade_rating ? <Badge>{t.trade_rating}</Badge> : <span className="text-ink-faint">--</span>}</td>
-                      <td className="whitespace-nowrap px-3 py-2.5">{t.execution_grade ? <Badge>{t.execution_grade}</Badge> : <span className="text-ink-faint">--</span>}</td>
-                      <td className="whitespace-nowrap px-3 py-2.5">
-                        <Link
-                          to={`/trades/${t.id}/edit`}
-                          title={`Edit trade #${t.trade_no}`}
-                          aria-label={`Edit trade #${t.trade_no}`}
-                          className="inline-flex rounded-md p-1.5 text-ink-faint transition hover:bg-surface-2 hover:text-ink"
-                        >
-                          <Pencil size={14} />
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+          <>
+            <TradeTable
+              title="Open Positions"
+              subtitle={
+                openCapital
+                  ? `${money(openCapital, { cents: false })} tied up, not counted in realised P&L`
+                  : 'Still live, not counted in realised P&L'
+              }
+              trades={open}
+              variant="open"
+            />
+            <TradeTable title={open.length ? 'Closed Trades' : undefined} trades={closed} variant="closed" />
+          </>
         )}
       </div>
     </>

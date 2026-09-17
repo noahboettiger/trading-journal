@@ -8,7 +8,7 @@ import {
 
 /** Columns a client is allowed to write. Anything else in a payload is ignored. */
 export const TRADE_COLUMNS = [
-  'playbook_id', 'asset_class', 'trade_style', 'symbol', 'direction', 'status', 'outcome',
+  'journal_id', 'playbook_id', 'asset_class', 'trade_style', 'symbol', 'direction', 'status', 'outcome',
   'trade_date', 'exit_date', 'entry_time', 'exit_time', 'session', 'timeframe', 'setup', 'trade_source',
   'contracts', 'entry_price', 'exit_price', 'stop_price', 'target_price', 'point_value',
   'option_type', 'option_side', 'strike', 'expiration', 'entry_premium', 'exit_premium',
@@ -20,7 +20,7 @@ export const TRADE_COLUMNS = [
 ]
 
 const NUMERIC_COLUMNS = new Set([
-  'playbook_id', 'contracts', 'entry_price', 'exit_price', 'stop_price',
+  'journal_id', 'playbook_id', 'contracts', 'entry_price', 'exit_price', 'stop_price',
   'target_price', 'point_value', 'strike', 'entry_premium', 'exit_premium',
   'underlying_entry', 'underlying_stop', 'underlying_target', 'dte_at_entry',
   'delta', 'theta', 'vega', 'iv_at_entry', 'collateral', 'risk_amount', 'planned_rr', 'gross_pnl',
@@ -147,6 +147,9 @@ export function enrich(trade, { withChildren = true } = {}) {
       .prepare('SELECT * FROM trade_images WHERE trade_id = ? ORDER BY sort_order, id')
       .all(trade.id)
   }
+  out.journal_name = trade.journal_id
+    ? db.prepare('SELECT name FROM journals WHERE id = ?').get(trade.journal_id)?.name ?? null
+    : null
   out.playbook_name = trade.playbook_id
     ? db.prepare('SELECT name FROM playbooks WHERE id = ?').get(trade.playbook_id)?.name ?? null
     : null
@@ -272,6 +275,7 @@ export function listTrades(q = {}) {
       params.push(val)
     }
   }
+  eq('journal_id', num(q.journal_id))
   eq('playbook_id', num(q.playbook_id))
   eq('asset_class', q.asset_class)
   eq('trade_style', q.trade_style)

@@ -1,4 +1,4 @@
-import type { Lookup, Lookups, Playbook, Stats, Tag, Trade } from './types'
+import type { Journal, Lookup, Lookups, Playbook, Stats, Tag, Trade } from './types'
 
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -32,6 +32,13 @@ export const api = {
     remove: (id: number) => req<void>(`/api/trades/${id}`, { method: 'DELETE' }),
     nextNumber: () => req<{ trade_no: number }>('/api/trades/next-number'),
     facets: () => req<Record<string, string[]>>('/api/trades/meta/facets'),
+  },
+  journals: {
+    list: () => req<Journal[]>('/api/journals'),
+    create: (body: unknown) => req<Journal>('/api/journals', { method: 'POST', body: JSON.stringify(body) }),
+    update: (id: number, body: unknown) => req<Journal>(`/api/journals/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+    remove: (id: number) => req<void>(`/api/journals/${id}`, { method: 'DELETE' }),
+    reorder: (ids: number[]) => req<Journal[]>('/api/journals/reorder', { method: 'PUT', body: JSON.stringify({ ids }) }),
   },
   lookups: {
     grouped: () => req<Lookups>('/api/lookups?grouped=true'),

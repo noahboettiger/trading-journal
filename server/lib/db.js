@@ -226,6 +226,52 @@ const MIGRATIONS = [
     ','
   );
   `,
+
+  // 6 - separate journals
+  //
+  // A 45-day cash-secured put and a 20-minute MNQ scalp do not belong in the
+  // same win rate, equity curve or calendar. Each journal keeps its own trades,
+  // dashboard, analytics and day notes. Existing trades are sorted into the
+  // right one by shape, so nothing needs reclassifying by hand.
+  `
+  CREATE TABLE journals (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    name                TEXT    NOT NULL UNIQUE,
+    kind                TEXT    NOT NULL DEFAULT 'general',
+    default_asset_class TEXT,
+    default_trade_style TEXT,
+    default_playbook_id INTEGER REFERENCES playbooks(id) ON DELETE SET NULL,
+    sort_order          INTEGER NOT NULL DEFAULT 0,
+    is_active           INTEGER NOT NULL DEFAULT 1,
+    created_at          TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+
+  ALTER TABLE trades          ADD COLUMN journal_id INTEGER REFERENCES journals(id) ON DELETE SET NULL;
+  ALTER TABLE journal_entries ADD COLUMN journal_id INTEGER REFERENCES journals(id) ON DELETE SET NULL;
+
+  INSERT INTO journals (name, kind, default_asset_class, default_trade_style, sort_order) VALUES
+    ('Day Trading',       'futures_day',   'futures', 'Day Trade',   0),
+    ('Swing Trading',     'options_swing', 'options', 'Swing Trade', 1),
+    ('Cash-Secured Puts', 'options_csp',   'options', 'Swing Trade', 2);
+
+  UPDATE journals SET default_playbook_id =
+    (SELECT id FROM playbooks WHERE name LIKE 'Futures%' ORDER BY id LIMIT 1) WHERE kind = 'futures_day';
+  UPDATE journals SET default_playbook_id =
+    (SELECT id FROM playbooks WHERE name LIKE '%Swing%' ORDER BY id LIMIT 1) WHERE kind = 'options_swing';
+  UPDATE journals SET default_playbook_id =
+    (SELECT id FROM playbooks WHERE name LIKE '%Cash-Secured%' ORDER BY id LIMIT 1) WHERE kind = 'options_csp';
+
+  -- Short puts are the cash-secured book; anything else in options is a swing;
+  -- everything remaining is day trading.
+  UPDATE trades SET journal_id = (SELECT id FROM journals WHERE kind = 'options_csp')
+   WHERE asset_class = 'options' AND option_side = 'sell' AND option_type = 'put';
+  UPDATE trades SET journal_id = (SELECT id FROM journals WHERE kind = 'options_swing')
+   WHERE journal_id IS NULL AND asset_class = 'options';
+  UPDATE trades SET journal_id = (SELECT id FROM journals WHERE kind = 'futures_day')
+   WHERE journal_id IS NULL;
+
+  CREATE INDEX idx_trades_journal ON trades(journal_id, trade_date DESC);
+  `,
 ]
 
 function migrate() {

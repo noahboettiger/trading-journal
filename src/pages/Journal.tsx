@@ -5,6 +5,7 @@ import { useAsync, useReference } from '@/lib/hooks'
 import { formatDay, todayISO } from '@/lib/format'
 import { PageHeader } from '@/components/Layout'
 import { Card, CardHeader, Field, Input, Select, Textarea, Spinner, ErrorNote, EmptyState } from '@/components/ui'
+import { useJournal } from '@/lib/journals'
 
 const TEMPLATE = `How would I rate the day overall?
 
@@ -31,7 +32,11 @@ interface Entry { id: number; entry_date: string; session: string | null; conten
 
 export default function Journal() {
   const reference = useReference()
-  const { data: entries, loading, error, reload } = useAsync<Entry[]>(() => api.journalList(), [])
+  const { journalId, journal } = useJournal()
+  const { data: entries, loading, error, reload } = useAsync<Entry[]>(
+    () => (journalId === null ? Promise.resolve([]) : api.journalList({ journal_id: journalId })),
+    [journalId],
+  )
   const [draft, setDraft] = useState({ entry_date: todayISO(), session: '', content: '', mood: '' })
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<unknown>(null)
@@ -48,7 +53,12 @@ export default function Journal() {
     setSaving(true)
     setSaveError(null)
     try {
-      await api.journalSave({ ...draft, session: draft.session || null, mood: draft.mood || null })
+      await api.journalSave({
+        ...draft,
+        session: draft.session || null,
+        mood: draft.mood || null,
+        journal_id: journalId,
+      })
       await reload()
     } catch (e) {
       setSaveError(e)
@@ -59,7 +69,10 @@ export default function Journal() {
 
   return (
     <>
-      <PageHeader title="Session journal" subtitle="Notes that belong to a day, not a single trade" />
+      <PageHeader
+        title={journal ? `${journal.name} notes` : 'Session journal'}
+        subtitle="Notes that belong to a day, not a single trade"
+      />
       <div className="grid gap-5 px-4 py-5 lg:px-7 xl:grid-cols-[minmax(0,1fr)_340px]">
         <Card>
           <CardHeader

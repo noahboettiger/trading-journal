@@ -14,6 +14,7 @@ import { Card, CardHeader, Field, Input, Select, Textarea, Badge, Spinner, Error
 import { RuleChecklist } from '@/components/RuleChecklist'
 import { ChartUpload } from '@/components/ChartUpload'
 import { ChipMultiSelect } from '@/components/ChipMultiSelect'
+import { useJournal } from '@/lib/journals'
 import {
   deriveGrossPnl, deriveNetPnl, deriveRiskAmount, resultR,
   daysHeld, dteAtEntry, dteAtExit, returnOnRisk,
@@ -49,7 +50,7 @@ function numeric(form: FormState) {
   for (const k of [
     'contracts', 'entry_price', 'exit_price', 'stop_price', 'target_price', 'point_value',
     'strike', 'entry_premium', 'exit_premium', 'underlying_entry', 'underlying_stop',
-    'underlying_target', 'delta', 'theta', 'vega', 'iv_at_entry', 'collateral', 'risk_amount',
+    'underlying_target', 'delta', 'theta', 'vega', 'iv_at_entry', 'collateral', 'risk_amount', 'journal_id',
     'gross_pnl', 'net_pnl', 'commissions', 'result_r_override',
   ]) {
     out[k] = n(form[k])
@@ -62,6 +63,7 @@ export default function TradeForm() {
   const navigate = useNavigate()
   const isEdit = !!id
   const reference = useReference()
+  const { journals, journal, journalId } = useJournal()
 
   const [form, setForm] = useState<FormState>(BLANK)
   const [saving, setSaving] = useState(false)
@@ -154,13 +156,33 @@ export default function TradeForm() {
     if (match) applyPlaybook(String(match.id))
   }
 
-  // Default a new trade to the first playbook matching the instrument type.
+  /**
+   * A new trade inherits the shape of the journal it is being logged into:
+   * instrument type, style and rule set. All still editable per trade.
+   */
+  useEffect(() => {
+    if (isEdit || !journal || form.journal_id) return
+    setForm((f) => ({
+      ...f,
+      journal_id: journal.id,
+      asset_class: journal.default_asset_class ?? f.asset_class,
+      trade_style: journal.default_trade_style ?? f.trade_style,
+      ...(journal.kind === 'options_csp' ? { option_type: 'put', option_side: 'sell' } : {}),
+    }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [journal, isEdit])
+
+  // Then attach the journal's rule set, or the first matching the instrument.
   useEffect(() => {
     if (isEdit || !reference.playbooks.length || form.playbook_id) return
-    const match = reference.playbooks.find((p) => p.asset_class === form.asset_class) ?? reference.playbooks[0]
+    const preferred = journal?.default_playbook_id
+      ? reference.playbooks.find((p) => p.id === journal.default_playbook_id)
+      : null
+    const match =
+      preferred ?? reference.playbooks.find((p) => p.asset_class === form.asset_class) ?? reference.playbooks[0]
     if (match) applyPlaybook(String(match.id))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reference.playbooks, form.asset_class, isEdit])
+  }, [reference.playbooks, form.asset_class, isEdit, journal])
 
   const save = async () => {
     setSaving(true)
@@ -203,7 +225,11 @@ export default function TradeForm() {
     <>
       <PageHeader
         title={isEdit ? `Edit trade #${form.trade_no}` : `Log trade${nextNo.data ? ` #${nextNo.data.trade_no}` : ''}`}
-        subtitle={isEdit ? 'Changes save to the same trade number' : 'Number is assigned automatically'}
+        subtitle={
+          isEdit
+            ? 'Changes save to the same trade number'
+            : `Logging into ${journal?.name ?? 'no journal'} · number assigned automatically`
+        }
         actions={
           <>
             {isEdit && (
@@ -306,6 +332,14 @@ export default function TradeForm() {
                     options={reference.playbooks.map((p) => ({ value: String(p.id), label: p.name }))}
                     placeholder="None"
                     onChange={(e) => applyPlaybook(e.target.value)}
+                  />
+                </Field>
+                <Field label="Journal" hint="Which book this trade belongs to">
+                  <Select
+                    value={String(form.journal_id ?? journalId ?? '')}
+                    options={journals.map((j) => ({ value: String(j.id), label: j.name }))}
+                    placeholder="Unassigned"
+                    onChange={(e) => set({ journal_id: e.target.value })}
                   />
                 </Field>
                 <Field label="Source">

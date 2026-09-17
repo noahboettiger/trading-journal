@@ -198,6 +198,45 @@ account and no per-machine anything.
 If both machines point `JOURNAL_DATA_DIR` at the same synced folder they share
 one journal, but only run one at a time.
 
+## Separate journals
+
+A 45-day cash-secured put and a 20-minute MNQ scalp do not belong in the same
+win rate. The name in the top left is a switcher, and everything downstream
+(trades, dashboard, calendar, analytics, day notes) is scoped to whichever
+journal is open.
+
+Three ship by default, and you can add your own in Settings → Journals:
+
+| Journal | Measured on |
+| --- | --- |
+| Day Trading | R multiples, win rate, profit factor, rule compliance |
+| Swing Trading | the same, over longer holds |
+| Cash-Secured Puts | return on collateral, annualised return, max profit captured, assignments |
+
+The dashboard changes with the journal. A premium-selling book drops R multiples
+and profit factor, which say nothing useful about a short put, and shows credit
+taken in, collateral deployed, capital-weighted annualised return, average days
+held, share of max profit captured and how many positions were assigned.
+
+Each journal carries its own defaults, so logging into the cash-secured book
+starts you on a short put with the right rule set attached. A trade can be moved
+between journals from its Journal field.
+
+Deleting a journal that still holds trades is refused rather than quietly
+detaching them.
+
+## Open and closed positions
+
+The trade list separates positions that are still live from ones that are
+finished, because they answer different questions. Open rows show days held,
+days to expiration left, capital tied up and credit taken in. Closed rows show
+risk, R, P&L and your two ratings.
+
+**Open positions are never counted as realised.** They stay out of P&L, win
+rate, the equity curve and the calendar, and appear instead as a banner on the
+dashboard showing how much capital is committed. A position counts only once you
+set its status to closed.
+
 ## What it tracks
 
 ### Trade categories

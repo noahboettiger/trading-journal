@@ -162,6 +162,7 @@ export default function TradeDetail() {
               <FieldRow label="Session" value={trade.session} />
               <FieldRow label="Timeframe" value={trade.timeframe} />
               <FieldRow label="Source" value={trade.trade_source} />
+              <FieldRow label="Journal" value={trade.journal_name} />
               <FieldRow label="Entry date" value={dateLabel} />
               <FieldRow label="Exit date" value={trade.exit_date ? formatDay(trade.exit_date) : 'Same day'} />
               <FieldRow label="Days held" value={trade.days_held === null ? '--' : `${trade.days_held}d`} icon={<Clock size={13} />} />
