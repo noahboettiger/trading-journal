@@ -341,6 +341,25 @@ const MIGRATIONS = [
   `
   ALTER TABLE trade_rolls ADD COLUMN net_credit REAL;
   `,
+
+  // 11 - scaling out, one row per fill
+  //
+  // Taking one contract off a three-lot is one position with two exits, not two
+  // trades. A single exit price cannot express it, and averaging by hand throws
+  // away the dates. Trades without partial exits keep using exit_premium and
+  // exit_date, which read as a single exit of the whole position.
+  `
+  CREATE TABLE trade_exits (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    trade_id   INTEGER NOT NULL REFERENCES trades(id) ON DELETE CASCADE,
+    exited_on  TEXT,
+    contracts  REAL,
+    price      REAL,
+    note       TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX idx_exits_trade ON trade_exits(trade_id, sort_order);
+  `,
 ]
 
 function migrate() {

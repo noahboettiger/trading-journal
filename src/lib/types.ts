@@ -76,6 +76,15 @@ export interface CashFlow {
   amount: number | null
 }
 
+export interface TradeExit {
+  id?: number
+  exited_on: string | null
+  contracts: number | null
+  price: number | null
+  note: string | null
+  sort_order: number
+}
+
 export interface TradeRoll {
   id?: number
   rolled_on: string | null
@@ -166,6 +175,11 @@ export interface Trade {
   dte_exit: number | null
   return_on_risk: number | null
   rolls: TradeRoll[]
+  exits: TradeExit[]
+  contracts_opened: number | null
+  contracts_closed: number
+  contracts_remaining: number | null
+  realised_so_far: number | null
   cash_flows: CashFlow[]
   legs: PositionLeg[]
   current_leg: PositionLeg

@@ -476,7 +476,9 @@ export function optionCashFlows(t) {
         contracts: rollContracts,
         premium: netPrice,
         isNetPrice: true,
-        amount: round2(sign * netPrice * OPTION_MULTIPLIER * rollContracts),
+        // Signed as cash already, so the side sign must not be applied again:
+        // a long roll paying a debit is entered negative and stays negative.
+        amount: round2(netPrice * OPTION_MULTIPLIER * rollContracts),
       })
     } else if (closeCost !== null || newCredit !== null) {
       // Closed and reopened as two orders, so both prices are known and both
@@ -504,22 +506,103 @@ export function optionCashFlows(t) {
     contracts = rollContracts
   }
 
-  const exit = num(t.exit_premium)
-  if (exit !== null) {
+  for (const exit of positionExits({ ...t, contracts })) {
     flows.push({
       kind: 'close',
-      date: t.exit_date ?? null,
-      contracts,
-      premium: exit,
-      amount: round2(-sign * exit * OPTION_MULTIPLIER * contracts),
+      date: exit.date,
+      contracts: exit.contracts,
+      premium: exit.price,
+      amount:
+        exit.price === null || exit.contracts === null
+          ? null
+          : round2(-sign * exit.price * OPTION_MULTIPLIER * exit.contracts),
     })
   }
 
   return flows
 }
 
-/** True once the final contract has been closed out. */
-export const isPositionClosed = (t) => num(t.exit_premium) !== null
+/**
+ * Every fill that took size off, oldest first.
+ *
+ * A trade that was closed in one go has no exit rows; its exit price and date
+ * describe a single fill of the whole position, so one is synthesised. That
+ * keeps every trade logged before scaling out existed working untouched.
+ */
+export function positionExits(t) {
+  const rows = [...(t.exits ?? [])].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+  if (rows.length) {
+    return rows.map((e) => ({
+      date: e.exited_on ?? null,
+      contracts: num(e.contracts),
+      price: num(e.price),
+      note: e.note ?? null,
+      partial: true,
+    }))
+  }
+
+  const price = num(t.exit_premium ?? t.exit_price)
+  if (price === null) return []
+  return [
+    {
+      date: t.exit_date ?? null,
+      contracts: num(t.contracts),
+      price,
+      note: null,
+      partial: false,
+    },
+  ]
+}
+
+/** Contracts opened, after any roll has resized the position. */
+export const contractsOpened = (t) => currentLeg(t).contracts ?? num(t.contracts)
+
+/** Contracts taken off so far. */
+export function contractsClosed(t) {
+  const exits = positionExits(t)
+  if (!exits.length) return 0
+  return exits.reduce((a, e) => a + (e.contracts ?? 0), 0)
+}
+
+/** Contracts still live. */
+export function contractsRemaining(t) {
+  const opened = contractsOpened(t)
+  if (opened === null) return null
+  return round2(opened - contractsClosed(t))
+}
+
+/**
+ * P&L banked on the portion already closed, while the rest runs.
+ *
+ * Each exit carries its share of what the position cost to put on, so taking
+ * one contract off a three-lot realises a third of the opening cash along with
+ * that fill's proceeds. Once everything is out this equals the whole result.
+ */
+export function realisedSoFar(t) {
+  if (t.asset_class !== 'options') return null
+  const opened = contractsOpened(t)
+  const closedCount = contractsClosed(t)
+  if (!opened || !closedCount) return null
+
+  const flows = optionCashFlows(t)
+  const before = flows
+    .filter((f) => f.kind !== 'close')
+    .reduce((a, f) => a + (f.amount ?? 0), 0)
+  const proceeds = flows
+    .filter((f) => f.kind === 'close')
+    .reduce((a, f) => a + (f.amount ?? 0), 0)
+
+  return round2(proceeds + before * Math.min(closedCount / opened, 1))
+}
+
+/** True once every contract is out, not merely once some size has come off. */
+export function isPositionClosed(t) {
+  if (!positionExits(t).length) return false
+  const remaining = contractsRemaining(t)
+  // Without a contract count there is nothing to reconcile, so an exit price
+  // is taken to mean the position is done.
+  return remaining === null ? true : remaining <= 0.0001
+}
 
 /** Cash taken in: every inflow, including the net credit on a roll. */
 export function creditReceived(t) {

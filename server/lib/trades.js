@@ -5,6 +5,7 @@ import {
   daysHeld, dteAtEntry, dteAtExit, returnOnRisk, num,
   collateralRequired, creditReceived, returnOnCollateral, annualisedReturn, percentOfMaxProfit,
   buybackCost, positionLegs, currentLeg, rollCount, optionCashFlows,
+  positionExits, contractsOpened, contractsClosed, contractsRemaining, realisedSoFar,
 } from '../../shared/calc.js'
 
 /** Columns a client is allowed to write. Anything else in a payload is ignored. */
@@ -127,7 +128,10 @@ export function enrich(trade, { withChildren = true } = {}) {
   const rolls = db
     .prepare('SELECT * FROM trade_rolls WHERE trade_id = ? ORDER BY sort_order, id')
     .all(trade.id)
-  trade = { ...trade, rolls }
+  const exits = db
+    .prepare('SELECT * FROM trade_exits WHERE trade_id = ? ORDER BY sort_order, id')
+    .all(trade.id)
+  trade = { ...trade, rolls, exits }
 
   const out = {
     ...trade,
@@ -138,6 +142,12 @@ export function enrich(trade, { withChildren = true } = {}) {
     dte_exit: dteAtExit(trade),
     return_on_risk: returnOnRisk(trade),
     rolls,
+    exits,
+    position_exits: positionExits(trade),
+    contracts_opened: contractsOpened(trade),
+    contracts_closed: contractsClosed(trade),
+    contracts_remaining: contractsRemaining(trade),
+    realised_so_far: realisedSoFar(trade),
     cash_flows: optionCashFlows(trade),
     legs: positionLegs(trade),
     current_leg: currentLeg(trade),
@@ -229,6 +239,16 @@ function replaceChildren(tradeId, body) {
     )
   }
 
+  if (Array.isArray(body.exits)) {
+    db.prepare('DELETE FROM trade_exits WHERE trade_id = ?').run(tradeId)
+    const ins = db.prepare(
+      'INSERT INTO trade_exits (trade_id, exited_on, contracts, price, note, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
+    )
+    body.exits.forEach((e, i) =>
+      ins.run(tradeId, e.exited_on || null, num(e.contracts), num(e.price), e.note ?? null, e.sort_order ?? i),
+    )
+  }
+
   if (Array.isArray(body.images)) {
     db.prepare('DELETE FROM trade_images WHERE trade_id = ?').run(tradeId)
     const ins = db.prepare('INSERT INTO trade_images (trade_id, path, caption, sort_order) VALUES (?, ?, ?, ?)')
@@ -239,8 +259,12 @@ function replaceChildren(tradeId, body) {
 }
 
 export function createTrade(body) {
-  const row = applyDerivations({ ...normalise(body), rolls: body.rolls ?? [] }, providedColumns(body))
+  const row = applyDerivations(
+    { ...normalise(body), rolls: body.rolls ?? [], exits: body.exits ?? [] },
+    providedColumns(body),
+  )
   delete row.rolls
+  delete row.exits
   if (!row.symbol) throw Object.assign(new Error('symbol is required'), { status: 400 })
   if (!row.trade_date) throw Object.assign(new Error('trade_date is required'), { status: 400 })
 
@@ -273,13 +297,18 @@ export function updateTrade(id, body) {
   const existingRolls = db
     .prepare('SELECT * FROM trade_rolls WHERE trade_id = ? ORDER BY sort_order, id')
     .all(id)
+  const existingExits = db
+    .prepare('SELECT * FROM trade_exits WHERE trade_id = ? ORDER BY sort_order, id')
+    .all(id)
   const merged = applyDerivations(
-    { ...existing, ...patch, rolls: body.rolls ?? existingRolls },
+    { ...existing, ...patch, rolls: body.rolls ?? existingRolls, exits: body.exits ?? existingExits },
     providedColumns(body),
   )
   for (const col of DERIVED_COLUMNS) {
     if (merged[col] !== existing[col]) patch[col] = merged[col]
   }
+  delete patch.rolls
+  delete patch.exits
 
   db.exec('BEGIN')
   try {

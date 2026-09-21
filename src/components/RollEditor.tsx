@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Plus, Trash2, ArrowRight } from 'lucide-react'
 import { Field, Input, Segmented } from './ui'
 import { money } from '@/lib/format'
+import { optionTypeLabel } from '@/lib/instruments'
 
 export interface Roll {
   id?: number
@@ -35,9 +36,10 @@ const n = (v: unknown) => {
 
 /**
  * A roll closes the contract in hand and opens another. Recording it here keeps
- * one position as one trade: the credit banked on earlier legs is not lost, the
- * holding period stays the whole campaign, and the trade count is not inflated
- * by what is really trade management.
+ * one position as one trade: the cash from earlier legs is not lost, the holding
+ * period stays the whole campaign, and the trade count is not inflated by what is
+ * really trade management. Works either way round, since a long roll usually pays
+ * a debit where a short one takes in a credit.
  */
 export function RollEditor({
   rolls,
@@ -45,13 +47,18 @@ export function RollEditor({
   openingStrike,
   openingContracts,
   openingExpiration,
+  optionType,
+  isSelling,
 }: {
   rolls: Roll[]
   onChange: (next: Roll[]) => void
   openingStrike: string | number | null
   openingContracts: string | number | null
   openingExpiration: string
+  optionType: string | null
+  isSelling: boolean
 }) {
+  const contractKind = optionTypeLabel(optionType)
   const [modes, setModes] = useState<Record<number, Mode>>({})
   const modeOf = (i: number): Mode => modes[i] ?? inferMode(rolls[i])
   const setMode = (i: number, mode: Mode) => {
@@ -86,7 +93,7 @@ export function RollEditor({
     <div className="space-y-3">
       {rolls.length === 0 && (
         <p className="text-xs text-ink-faint">
-          No rolls yet. Add one when you buy back the contract in hand and sell another in its place.
+          No rolls yet. Add one when you close the contract in hand and open another in its place.
         </p>
       )}
 
@@ -108,11 +115,11 @@ export function RollEditor({
               <span className="flex flex-wrap items-center gap-2 text-xs font-semibold text-ink-muted">
                 Roll {i + 1}
                 <span className="chip !py-0.5 !text-[11px]">
-                  {fromStrike || '?'}P {fromExpiration ? `exp ${fromExpiration}` : ''}
+                  {fromStrike || '?'} {contractKind} {fromExpiration ? `exp ${fromExpiration}` : ''}
                 </span>
                 <ArrowRight size={13} className="text-ink-faint" />
                 <span className="chip !py-0.5 !text-[11px]">
-                  {roll.new_strike || '?'}P {roll.new_expiration ? `exp ${roll.new_expiration}` : ''}
+                  {roll.new_strike || '?'} {contractKind} {roll.new_expiration ? `exp ${roll.new_expiration}` : ''}
                 </span>
                 {cash !== null && (
                   <span className={`text-[11px] font-semibold ${cash >= 0 ? 'text-win' : 'text-loss'}`}>
@@ -162,10 +169,10 @@ export function RollEditor({
                 </Field>
               ) : (
                 <>
-                  <Field label="Paid to close" hint="Premium per contract">
+                  <Field label={isSelling ? 'Paid to close' : 'Sold to close'} hint="Premium per contract">
                     <Input type="number" step="any" value={roll.close_cost ?? ''} onChange={(e) => update(i, { close_cost: e.target.value })} />
                   </Field>
-                  <Field label="New credit" hint="Premium per contract">
+                  <Field label={isSelling ? 'New credit' : 'New premium paid'} hint="Premium per contract">
                     <Input type="number" step="any" value={roll.new_credit ?? ''} onChange={(e) => update(i, { new_credit: e.target.value })} />
                   </Field>
                 </>

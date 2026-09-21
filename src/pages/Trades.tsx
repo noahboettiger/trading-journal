@@ -116,6 +116,7 @@ function TradeTable({ title, subtitle, trades, variant }: {
               <TH>Entry model</TH>
               {isOpen ? (
                 <>
+                  <TH>Size</TH>
                   <TH>Held</TH>
                   <TH>DTE left</TH>
                   <TH>Capital</TH>
@@ -148,6 +149,11 @@ function TradeTable({ title, subtitle, trades, variant }: {
 
                 {isOpen ? (
                   <>
+                    <TD className="text-ink-muted tnum">
+                      {t.contracts_closed > 0 && t.contracts_remaining !== null
+                        ? `${t.contracts_remaining}/${t.contracts_opened}`
+                        : (t.contracts ?? '--')}
+                    </TD>
                     <TD className="text-ink-muted tnum">{t.days_held === null ? '--' : `${t.days_held}d`}</TD>
                     <TD className={`tnum ${(t.dte_exit ?? 99) <= 7 ? 'text-loss font-semibold' : 'text-ink-muted'}`}>
                       {t.dte_exit === null ? '--' : `${t.dte_exit}d`}

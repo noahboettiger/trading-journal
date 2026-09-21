@@ -231,6 +231,11 @@ A roll is trade management, not a new trade. Buying back the contract in hand
 and selling another keeps the position going, so the journal keeps it as one
 record and totals the cash across the whole campaign.
 
+This works on any options position, long premium or short. A call you bought and
+rolled out to a further expiration follows the same path as a short put rolled
+down and out; the only difference is the sign, since a long roll usually pays a
+debit rather than taking in a credit.
+
 Rolls fill two different ways, and both are supported:
 
 - **One net price.** A diagonal or calendar roll usually fills as a single combo
@@ -267,6 +272,37 @@ field is an override, and it only takes effect if you type in it. Leaving it
 alone keeps the figure live, so correcting a premium later corrects everything
 downstream.
 
+## Scaling out of a position
+
+Taking a piece off is not a closed trade. Sell one of three contracts and the
+journal records that fill on its own line, while the position stays open with
+two still working.
+
+Add a line per fill under **Scale out** on the trade form: the date, how many
+contracts went out, and the price they went out at. The form and the review card
+both show how many contracts are left and what has been banked so far.
+
+Worked example, three contracts bought at 5.00:
+
+| Date | Contracts | Price | Cash |
+| --- | --- | --- | --- |
+| Opened | 3 | 5.00 | -$1,500 |
+| Oct 2 | 1 | 8.00 | +$800 |
+| Oct 9 | 2 | 9.50 | +$1,900 |
+| | | **Net** | **+$1,200** |
+
+After the first fill the position reads **2 of 3 still open** and **$300 realised
+so far**: the $800 taken in, less the $500 of cost basis that one contract
+carried. Cost basis is allocated proportionally, so banking a partial never
+front-loads or back-loads the entry.
+
+**Net P&L stays unrealised until every contract is out.** The position leaves the
+open section, and starts counting toward win rate, the equity curve and the
+calendar, only once the contracts remaining reach zero.
+
+Leaving the scale-out list empty keeps the simple case simple: a single exit
+premium closes the whole position exactly as it did before.
+
 ## Open and closed positions
 
 The trade list separates positions that are still live from ones that are
@@ -286,14 +322,14 @@ set its status to closed.
 Every trade is filed under four independent axes, so you can slice the record any way
 you need:
 
-- **Instrument type** — futures or options
-- **Trade style** — day trade, swing trade, scalp, position
-- **Trade type** — your setup: LSRM, Judas Swing, 15m Continuation, IFVG Reversal,
-  Break and Retest, and anything else you add
-- **Buy or sell** (options) — so "show me every premium-selling trade and what it
+- **Instrument type**: futures or options
+- **Trade style**: day trade, swing trade, cash-secured put, scalp, position
+- **Entry model**, your setup: Freestyle, iFVG Reversal, Mech Model, Break and
+  Retest, 2022 Model, Unicorn Model, and anything else you add
+- **Buy or sell** (options), so "show me every premium-selling trade and what it
   returned" is one filter, not a separate tracker
 
-Trade type, style, session, source, emotional state and timeframe are all **editable
+Entry model, style, session, source, emotional state and timeframe are all **editable
 lists** you manage in Settings. Adding a new setup never requires a code change.
 
 ### Futures fields
@@ -394,35 +430,35 @@ percentage stays honest.
 
 ## What it shows you
 
-**Dashboard** — net P&L, win rate, profit factor, average R, average trade, max
+**Dashboard**: net P&L, win rate, profit factor, average R, average trade, max
 drawdown and current streak. Equity curve, monthly P&L bars, and the trading calendar.
 
-**Trading calendar** — daily P&L in a month grid with a **weekly total** in the
+**Trading calendar**: daily P&L in a month grid with a **weekly total** in the
 trailing column, so a day, its week and the month all read off one view. The Calendar
 page adds a daily/weekly/monthly breakdown table underneath.
 
-**Rule compliance** — the part a normal journal cannot do. Two comparisons:
+**Rule compliance**, the part a normal journal cannot do. Two comparisons:
 
 1. Trades where you followed every rule vs trades where you broke at least one, side
    by side on net P&L, win rate and average R.
 2. **What broken rules cost**: for each individual rule, how often you break it and
    your net P&L on the trades where it was left unchecked, worst first.
 
-**Analytics** — performance grouped by trade type, trade style, instrument, options
+**Analytics**: performance grouped by trade type, trade style, instrument, options
 buying vs selling, ticker, session, day of week, timeframe, direction, source,
 execution grade, emotional state, mistake tag and playbook.
 
-**Session journal** — day-level notes separate from individual trades, with an
+**Session journal**: day-level notes separate from individual trades, with an
 optional starter template.
 
 ### Room to actually write
 
 Every trade carries four separate long-form fields rather than one notes box:
 
-- **Thesis** — why you took it, the read you were trading
-- **Notes** — what actually happened once you were in, and how you managed it
-- **Lesson learned** — the one thing to carry forward
-- **Reflections** — anything else
+- **Thesis**: why you took it, the read you were trading
+- **Notes**: what actually happened once you were in, and how you managed it
+- **Lesson learned**: the one thing to carry forward
+- **Reflections**: anything else
 
 Plus a note on any individual rule explaining why it was missed. All four are
 searchable from the trade log.

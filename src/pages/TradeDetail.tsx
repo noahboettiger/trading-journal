@@ -172,7 +172,20 @@ export default function TradeDetail() {
                   <FieldRow label="Contract" value={trade.strike ? `${num(trade.strike)} ${optionTypeLabel(trade.option_type)}`.trim() : '--'} />
                   <FieldRow label="Side" value={trade.option_side === 'sell' ? 'Selling premium' : trade.option_side === 'buy' ? 'Buying premium' : '--'} />
                   <FieldRow label="Expiration" value={trade.expiration ? formatDay(trade.expiration) : '--'} icon={<CalendarClock size={13} />} />
-                  <FieldRow label="Contracts" value={num(trade.contracts)} />
+                  <FieldRow
+                    label="Contracts"
+                    value={
+                      trade.contracts_remaining !== null && trade.contracts_closed > 0
+                        ? `${num(trade.contracts_remaining)} of ${num(trade.contracts_opened)} open`
+                        : num(trade.contracts)
+                    }
+                  />
+                  {trade.realised_so_far !== null && trade.contracts_remaining !== null && trade.contracts_remaining > 0 && (
+                    <FieldRow
+                      label="Realised so far"
+                      value={<span className={pnlClass(trade.realised_so_far)}>{money(trade.realised_so_far, { sign: true })}</span>}
+                    />
+                  )}
                   <FieldRow label="Entry premium" value={trade.entry_premium === null ? '--' : `$${num(trade.entry_premium)}`} />
                   <FieldRow label="Exit premium" value={trade.exit_premium === null ? '--' : `$${num(trade.exit_premium)}`} />
                   <FieldRow label="DTE at entry" value={trade.dte_entry === null ? '--' : `${trade.dte_entry}d`} />
@@ -273,7 +286,15 @@ export default function TradeDetail() {
                         {f.date ? formatDay(f.date, { month: 'short', day: 'numeric' }) : '--'}
                       </td>
                       <td className="whitespace-nowrap px-4 py-2.5 font-medium">
-                        {f.kind === 'open' ? 'Opened' : f.kind === 'roll-close' ? 'Bought back' : f.kind === 'roll' ? 'Rolled into' : 'Closed'}
+                        {f.kind === 'open'
+                          ? 'Opened'
+                          : f.kind === 'roll-close'
+                            ? 'Bought back'
+                            : f.kind === 'roll'
+                              ? 'Rolled into'
+                              : trade.contracts_closed > 0 && trade.exits.length > 1
+                                ? 'Scaled out'
+                                : 'Closed'}
                         {f.kind === 'roll' && f.isNetPrice && (
                           <span className="ml-2 text-[11px] text-ink-faint">net price</span>
                         )}
@@ -302,8 +323,12 @@ export default function TradeDetail() {
               <ArrowRight size={13} className="text-ink-faint" />
               <span className="text-loss">{money(trade.buyback_cost)} out</span>
               <ArrowRight size={13} className="text-ink-faint" />
-              <span className={`font-semibold ${pnlClass(trade.net_pnl)}`}>
-                {trade.net_pnl === null ? 'still open' : `${money(trade.net_pnl, { sign: true })} net`}
+              <span className={`font-semibold ${pnlClass(trade.net_pnl ?? trade.realised_so_far)}`}>
+                {trade.net_pnl !== null
+                  ? `${money(trade.net_pnl, { sign: true })} net`
+                  : trade.realised_so_far !== null
+                    ? `${money(trade.realised_so_far, { sign: true })} realised so far`
+                    : 'still open'}
               </span>
               <span className="ml-auto text-ink-faint">
                 {trade.days_held === null ? '' : `${trade.days_held} days across the campaign`}

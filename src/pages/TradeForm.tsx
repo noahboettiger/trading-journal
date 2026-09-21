@@ -7,6 +7,7 @@ import { useAsync, useReference } from '@/lib/hooks'
 import { money, rMultiple, pct, todayISO, pnlClass } from '@/lib/format'
 import {
   pointValueFor, GRADES, ASSET_CLASSES, DIRECTIONS, OPTION_SIDES, OPTION_TYPES, STATUSES, CLOSE_METHODS,
+  optionTypeLabel,
 } from '@/lib/instruments'
 import type { RuleCheck, Trade, TradeImage } from '@/lib/types'
 import { PageHeader } from '@/components/Layout'
@@ -15,12 +16,14 @@ import { RuleChecklist } from '@/components/RuleChecklist'
 import { ChartUpload } from '@/components/ChartUpload'
 import { ChipMultiSelect } from '@/components/ChipMultiSelect'
 import { RollEditor, type Roll } from '@/components/RollEditor'
+import { ExitEditor, type Exit } from '@/components/ExitEditor'
 import { useJournal } from '@/lib/journals'
 import {
   deriveGrossPnl, deriveNetPnl, deriveRiskAmount, resultR,
   daysHeld, dteAtEntry, dteAtExit, returnOnRisk,
   collateralRequired, creditReceived, returnOnCollateral, annualisedReturn, percentOfMaxProfit,
-  buybackCost, currentLeg, parseMulti, joinMulti,
+  buybackCost, currentLeg, contractsOpened, contractsRemaining, realisedSoFar,
+  parseMulti, joinMulti,
 } from '@shared/calc.js'
 
 type FormState = Record<string, any>
@@ -37,6 +40,7 @@ const BLANK: FormState = {
   rule_checks: [] as RuleCheck[],
   tag_ids: [] as number[],
   rolls: [] as Roll[],
+  exits: [] as Exit[],
 }
 
 /** Strings from inputs become numbers or null before any math or save. */
@@ -99,6 +103,7 @@ export default function TradeForm() {
         for (const [k, v] of Object.entries(f)) if (v === null) f[k] = ''
         f.images = t.images ?? []
         f.rolls = (t.rolls ?? []).map((r: any) => ({ ...r }))
+        f.exits = (t.exits ?? []).map((e: any) => ({ ...e }))
         setTouchedMoney(
           new Set(
             String(t.manual_fields ?? '')
@@ -120,7 +125,10 @@ export default function TradeForm() {
   const isOptions = form.asset_class === 'options'
   const isSelling = isOptions && form.option_side === 'sell'
   const isCsp = isSelling && form.option_type === 'put'
-  const calc = useMemo(() => ({ ...numeric(form), rolls: form.rolls ?? [] }), [form])
+  const calc = useMemo(
+    () => ({ ...numeric(form), rolls: form.rolls ?? [], exits: form.exits ?? [] }),
+    [form],
+  )
 
   // Live preview. Typed values win; blanks fall back to the derivation.
   const grossPreview = n(form.gross_pnl) ?? deriveGrossPnl(calc)
@@ -140,6 +148,10 @@ export default function TradeForm() {
   const buyback = buybackCost(calc)
   const leg = currentLeg(calc)
   const rollCount = (form.rolls as Roll[]).length
+  const exitCount = (form.exits as Exit[]).length
+  const openedContracts = contractsOpened(calc)
+  const remainingContracts = contractsRemaining(calc)
+  const realised = realisedSoFar(calc)
 
   /**
    * Attach the selected playbook's rules, snapshotting their text. Checks
@@ -225,6 +237,7 @@ export default function TradeForm() {
         tag_ids: form.tag_ids,
         images: form.images,
         rolls: form.rolls ?? [],
+        exits: form.exits ?? [],
       }
       // A money field is only sent when the trader put it there. Sending one
       // back that the app itself calculated would pin it as manual and stop it
@@ -446,8 +459,17 @@ export default function TradeForm() {
                     <Field label={form.option_side === 'sell' ? 'Credit received' : 'Premium paid'}>
                       <Input type="number" step="any" value={form.entry_premium ?? ''} onChange={(e) => set({ entry_premium: e.target.value })} />
                     </Field>
-                    <Field label="Exit premium" hint="0 if expired worthless">
-                      <Input type="number" step="any" value={form.exit_premium ?? ''} onChange={(e) => set({ exit_premium: e.target.value })} />
+                    <Field
+                      label="Exit premium"
+                      hint={exitCount ? 'Ignored: the exits below are in use' : '0 if expired worthless'}
+                    >
+                      <Input
+                        type="number"
+                        step="any"
+                        disabled={exitCount > 0}
+                        value={form.exit_premium ?? ''}
+                        onChange={(e) => set({ exit_premium: e.target.value })}
+                      />
                     </Field>
                     <Field label="How it closed">
                       <Select
@@ -485,32 +507,58 @@ export default function TradeForm() {
                     </Field>
                   </div>
 
-                  {isSelling && (
-                    <div className="rounded-lg border border-line bg-surface-2/30 p-3">
-                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                        <span className="label">Roll history</span>
-                        {rollCount > 0 && (
-                          <span className="text-[11px] text-ink-faint tnum">
-                            {rollCount} roll{rollCount === 1 ? '' : 's'} · now holding {leg.strike ?? '?'}P
-                            {leg.expiration ? ` exp ${leg.expiration}` : ''}
-                            {buyback ? ` · ${money(buyback)} paid to close legs` : ''}
-                          </span>
-                        )}
-                      </div>
-                      <p className="mb-3 text-[11px] leading-relaxed text-ink-faint">
-                        A roll stays part of this trade rather than becoming a new one, so the credit you already
-                        banked still counts and days held covers the whole campaign. The fields above describe the
-                        contract you opened with; the exit premium below closes whatever you are holding now.
-                      </p>
-                      <RollEditor
-                        rolls={form.rolls ?? []}
-                        onChange={(rolls) => set({ rolls })}
-                        openingStrike={form.strike ?? null}
-                        openingContracts={form.contracts ?? null}
-                        openingExpiration={form.expiration ?? ''}
-                      />
+                  <div className="rounded-lg border border-line bg-surface-2/30 p-3">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <span className="label">Scale out</span>
+                      {exitCount > 0 && remainingContracts !== null && (
+                        <span className="text-[11px] text-ink-faint tnum">
+                          {remainingContracts > 0
+                            ? `${remainingContracts} of ${openedContracts} still open`
+                            : 'fully closed'}
+                          {realised !== null ? ` · ${money(realised, { sign: true })} realised` : ''}
+                        </span>
+                      )}
                     </div>
-                  )}
+                    <p className="mb-3 text-[11px] leading-relaxed text-ink-faint">
+                      Use this when you took size off in more than one fill. Each exit carries its share of what the
+                      position cost to open, so a third of a three-lot realises a third of the entry. Leave it empty
+                      and the single exit premium above closes the whole position.
+                    </p>
+                    <ExitEditor
+                      exits={form.exits ?? []}
+                      onChange={(exits) => set({ exits })}
+                      openedContracts={openedContracts}
+                      isSelling={isSelling}
+                    />
+                  </div>
+
+                  <div className="rounded-lg border border-line bg-surface-2/30 p-3">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <span className="label">Roll history</span>
+                      {rollCount > 0 && (
+                        <span className="text-[11px] text-ink-faint tnum">
+                          {rollCount} roll{rollCount === 1 ? '' : 's'} · now holding {leg.strike ?? '?'}{' '}
+                          {optionTypeLabel(form.option_type)}
+                          {leg.expiration ? ` exp ${leg.expiration}` : ''}
+                          {buyback ? ` · ${money(buyback)} paid to close legs` : ''}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mb-3 text-[11px] leading-relaxed text-ink-faint">
+                      A roll stays part of this trade rather than becoming a new one, so what you already banked
+                      still counts and days held covers the whole campaign. The fields above describe the contract
+                      you opened with; the exit above closes whatever you are holding now.
+                    </p>
+                    <RollEditor
+                      rolls={form.rolls ?? []}
+                      onChange={(rolls) => set({ rolls })}
+                      openingStrike={form.strike ?? null}
+                      openingContracts={form.contracts ?? null}
+                      openingExpiration={form.expiration ?? ''}
+                      optionType={form.option_type ?? null}
+                      isSelling={isSelling}
+                    />
+                  </div>
 
                   <div>
                     <button type="button" className="btn-subtle !px-0" onClick={() => setShowGreeks((v) => !v)}>
