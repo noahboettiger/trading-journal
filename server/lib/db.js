@@ -332,6 +332,15 @@ const MIGRATIONS = [
   );
   CREATE INDEX idx_rolls_trade ON trade_rolls(trade_id, sort_order);
   `,
+
+  // 10 - a roll is often one combo order with a single net price
+  //
+  // A diagonal roll fills as one order: the broker reports a net credit, not a
+  // separate buy-back and sale. Asking for both forced those numbers to be
+  // invented. net_credit records what the ticket actually said.
+  `
+  ALTER TABLE trade_rolls ADD COLUMN net_credit REAL;
+  `,
 ]
 
 function migrate() {

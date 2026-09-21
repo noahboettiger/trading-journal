@@ -241,62 +241,70 @@ export default function TradeDetail() {
           </div>
         </Card>
 
-        {trade.roll_count > 0 && (
+        {isOptions && trade.cash_flows.length > 1 && (
           <Card>
             <CardHeader
-              title="Roll History"
+              title={trade.roll_count ? 'Position History' : 'Cash Flow'}
               icon={<RefreshCw size={15} />}
-              subtitle="One position managed over time, not separate trades"
-              right={<Badge tone="accent">{trade.roll_count} roll{trade.roll_count === 1 ? '' : 's'}</Badge>}
+              subtitle={
+                trade.roll_count
+                  ? 'One position managed over time, not separate trades'
+                  : 'Every fill and what it moved'
+              }
+              right={
+                trade.roll_count ? (
+                  <Badge tone="accent">{trade.roll_count} roll{trade.roll_count === 1 ? '' : 's'}</Badge>
+                ) : undefined
+              }
             />
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-sm">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead>
                   <tr className="border-b border-line text-left">
-                    {['Leg', 'Contract', 'Opened', 'Credit in', 'Closed', 'Cost to close', 'Kept'].map((h) => (
+                    {['Date', 'Action', 'Contract', 'Price', 'Cash'].map((h) => (
                       <th key={h} className="label whitespace-nowrap px-4 py-2.5 font-semibold">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
-                  {trade.legs.map((leg) => {
-                    const creditIn = (leg.credit ?? 0) * 100 * (leg.contracts ?? 0)
-                    const costOut = (leg.close_cost ?? 0) * 100 * (leg.contracts ?? 0)
-                    const kept = leg.close_cost === null ? null : creditIn - costOut
-                    return (
-                      <tr key={leg.leg}>
-                        <td className="whitespace-nowrap px-4 py-2.5 font-semibold tnum">{leg.leg}</td>
-                        <td className="whitespace-nowrap px-4 py-2.5">
-                          {leg.strike ? `${num(leg.strike)} ${optionTypeLabel(trade.option_type)}` : '--'}
-                          {leg.expiration && (
-                            <span className="ml-2 text-[11px] text-ink-faint">exp {formatDay(leg.expiration, { month: 'short', day: 'numeric' })}</span>
-                          )}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-2.5 text-ink-muted tnum">
-                          {leg.opened_on ? formatDay(leg.opened_on, { month: 'short', day: 'numeric' }) : '--'}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-2.5 text-win tnum">{money(creditIn)}</td>
-                        <td className="whitespace-nowrap px-4 py-2.5 text-ink-muted tnum">
-                          {leg.closed_on ? formatDay(leg.closed_on, { month: 'short', day: 'numeric' }) : 'Still open'}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-2.5 text-ink-muted tnum">
-                          {leg.close_cost === null ? '--' : money(costOut)}
-                        </td>
-                        <td className={`whitespace-nowrap px-4 py-2.5 font-semibold tnum ${pnlClass(kept)}`}>
-                          {kept === null ? '--' : money(kept, { sign: true })}
-                        </td>
-                      </tr>
-                    )
-                  })}
+                  {trade.cash_flows.map((f, i) => (
+                    <tr key={i}>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-ink-muted tnum">
+                        {f.date ? formatDay(f.date, { month: 'short', day: 'numeric' }) : '--'}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 font-medium">
+                        {f.kind === 'open' ? 'Opened' : f.kind === 'roll-close' ? 'Bought back' : f.kind === 'roll' ? 'Rolled into' : 'Closed'}
+                        {f.kind === 'roll' && f.isNetPrice && (
+                          <span className="ml-2 text-[11px] text-ink-faint">net price</span>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-ink-muted">
+                        {f.strike
+                          ? `${num(f.strike)} ${optionTypeLabel(trade.option_type)}${
+                              f.expiration ? ` exp ${formatDay(f.expiration, { month: 'short', day: 'numeric' })}` : ''
+                            }`
+                          : '--'}
+                        {f.contracts ? <span className="ml-2 text-[11px] text-ink-faint">x{num(f.contracts)}</span> : null}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-ink-muted tnum">
+                        {f.premium === null ? '--' : num(f.premium)}
+                      </td>
+                      <td className={`whitespace-nowrap px-4 py-2.5 font-semibold tnum ${pnlClass(f.amount)}`}>
+                        {f.amount === null ? '--' : money(f.amount, { sign: true })}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
             <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-3 text-xs text-ink-muted">
-              <span className="font-semibold">{money(trade.credit_received)} taken in</span>
+              <span className="font-semibold text-win">{money(trade.credit_received)} in</span>
               <ArrowRight size={13} className="text-ink-faint" />
-              <span>{money(trade.buyback_cost)} paid back</span>
+              <span className="text-loss">{money(trade.buyback_cost)} out</span>
               <ArrowRight size={13} className="text-ink-faint" />
-              <span className={`font-semibold ${pnlClass(trade.net_pnl)}`}>{money(trade.net_pnl, { sign: true })} net</span>
+              <span className={`font-semibold ${pnlClass(trade.net_pnl)}`}>
+                {trade.net_pnl === null ? 'still open' : `${money(trade.net_pnl, { sign: true })} net`}
+              </span>
               <span className="ml-auto text-ink-faint">
                 {trade.days_held === null ? '' : `${trade.days_held} days across the campaign`}
               </span>

@@ -65,9 +65,21 @@ export type Lookups = Partial<Record<LookupKind, Lookup[]>>
 
 export interface Tag { id: number; name: string; kind: string }
 
+export interface CashFlow {
+  kind: 'open' | 'roll' | 'roll-close' | 'close'
+  date: string | null
+  strike?: number | null
+  expiration?: string | null
+  contracts: number | null
+  premium: number | null
+  isNetPrice?: boolean
+  amount: number | null
+}
+
 export interface TradeRoll {
   id?: number
   rolled_on: string | null
+  net_credit: number | null
   close_cost: number | null
   new_strike: number | null
   new_expiration: string | null
@@ -145,6 +157,8 @@ export interface Trade {
   commissions: number
   net_pnl: number | null
   result_r_override: number | null
+  /** Comma-separated money fields the trader entered by hand. */
+  manual_fields: string | null
   result_r: number | null
   computed_rr: number | null
   days_held: number | null
@@ -152,6 +166,7 @@ export interface Trade {
   dte_exit: number | null
   return_on_risk: number | null
   rolls: TradeRoll[]
+  cash_flows: CashFlow[]
   legs: PositionLeg[]
   current_leg: PositionLeg
   roll_count: number

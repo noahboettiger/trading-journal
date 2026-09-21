@@ -28,25 +28,13 @@ export function deriveGrossPnl(t) {
   const sign = dirSign(t.direction)
 
   if (t.asset_class === 'options') {
-    if (t.option_side === 'sell') {
-      const credit = creditReceived(t)
-      if (credit === null) return null
-
-      // Only the FINAL leg being closed realises the position. Checking
-      // whether any leg had closed was wrong: a roll closes the leg in hand
-      // while the position carries on, so an open rolled put reported the
-      // credit it had banked so far as though it were a finished result.
-      const legs = positionLegs(t)
-      if (legs[legs.length - 1].close_cost === null) return null
-
-      // Credit banked across every leg, less what each cost to buy back. A
-      // position that was never rolled reduces to the usual one-leg case.
-      return round2(credit - (buybackCost(t) ?? 0))
-    }
-    const entry = num(t.entry_premium)
-    const exit = num(t.exit_premium)
-    if (entry === null || exit === null || contracts === null) return null
-    return round2((exit - entry) * optionSideSign(t) * contracts * OPTION_MULTIPLIER)
+    // Only closing the final contract realises the position. A roll closes a
+    // leg while the position carries on, so an open rolled put must not report
+    // the credit it has banked so far as though it were a finished result.
+    if (!isPositionClosed(t)) return null
+    const flows = optionCashFlows(t)
+    if (!flows.length || flows.some((f) => f.amount === null)) return null
+    return round2(flows.reduce((a, f) => a + f.amount, 0))
   }
 
   const entry = num(t.entry_price)
@@ -441,23 +429,111 @@ export const currentLeg = (t) => {
   return legs[legs.length - 1]
 }
 
-/** Total credit taken in across every leg, before any buy-backs. */
-export function creditReceived(t) {
-  if (t.option_side !== 'sell') return null
-  const legs = positionLegs(t)
-  if (legs.every((l) => l.credit === null || l.contracts === null)) return null
-  return round2(
-    legs.reduce((a, l) => a + (l.credit ?? 0) * OPTION_MULTIPLIER * (l.contracts ?? 0), 0),
-  )
+/**
+ * Every cash movement this options position made, in order.
+ *
+ * Working in cash flows rather than per-leg pairs is what lets a combo roll
+ * work: a diagonal fills as a single order with one net price, so the broker
+ * never reports a separate buy-back and sale. A roll contributes whichever it
+ * has, a net price or the two halves, and the arithmetic is the same either way.
+ *
+ * Selling premium takes cash in on open and pays it out on close; buying does
+ * the reverse, which the sign handles.
+ */
+export function optionCashFlows(t) {
+  if (t.asset_class !== 'options') return []
+  const sign = t.option_side === 'sell' ? 1 : -1
+  const flows = []
+
+  let contracts = num(t.contracts) ?? 0
+  const entry = num(t.entry_premium)
+  if (entry !== null) {
+    flows.push({
+      kind: 'open',
+      date: t.trade_date ?? null,
+      strike: num(t.strike),
+      expiration: t.expiration ?? null,
+      contracts,
+      premium: entry,
+      amount: round2(sign * entry * OPTION_MULTIPLIER * contracts),
+    })
+  }
+
+  const sortedRolls = [...(t.rolls ?? [])].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+  for (const [i, roll] of sortedRolls.entries()) {
+    const rollContracts = num(roll.new_contracts) ?? contracts
+    const netPrice = num(roll.net_credit)
+    const closeCost = num(roll.close_cost)
+    const newCredit = num(roll.new_credit)
+
+    if (netPrice !== null) {
+      // A combo order fills at one price, so that is all there is to record.
+      flows.push({
+        kind: 'roll',
+        date: roll.rolled_on ?? null,
+        strike: num(roll.new_strike),
+        expiration: roll.new_expiration ?? null,
+        contracts: rollContracts,
+        premium: netPrice,
+        isNetPrice: true,
+        amount: round2(sign * netPrice * OPTION_MULTIPLIER * rollContracts),
+      })
+    } else if (closeCost !== null || newCredit !== null) {
+      // Closed and reopened as two orders, so both prices are known and both
+      // belong in the ledger. Collapsing them to a net would understate the
+      // credit taken in and overstate the share of maximum profit kept.
+      flows.push({
+        kind: 'roll-close',
+        date: roll.rolled_on ?? null,
+        strike: i === 0 ? num(t.strike) : null,
+        expiration: null,
+        contracts,
+        premium: closeCost,
+        amount: closeCost === null ? null : round2(-sign * closeCost * OPTION_MULTIPLIER * contracts),
+      })
+      flows.push({
+        kind: 'roll',
+        date: roll.rolled_on ?? null,
+        strike: num(roll.new_strike),
+        expiration: roll.new_expiration ?? null,
+        contracts: rollContracts,
+        premium: newCredit,
+        amount: newCredit === null ? null : round2(sign * newCredit * OPTION_MULTIPLIER * rollContracts),
+      })
+    }
+    contracts = rollContracts
+  }
+
+  const exit = num(t.exit_premium)
+  if (exit !== null) {
+    flows.push({
+      kind: 'close',
+      date: t.exit_date ?? null,
+      contracts,
+      premium: exit,
+      amount: round2(-sign * exit * OPTION_MULTIPLIER * contracts),
+    })
+  }
+
+  return flows
 }
 
-/** Total paid to buy back legs, including every roll along the way. */
+/** True once the final contract has been closed out. */
+export const isPositionClosed = (t) => num(t.exit_premium) !== null
+
+/** Cash taken in: every inflow, including the net credit on a roll. */
+export function creditReceived(t) {
+  if (t.option_side !== 'sell') return null
+  const flows = optionCashFlows(t)
+  if (!flows.length) return null
+  return round2(flows.reduce((a, f) => a + Math.max(f.amount ?? 0, 0), 0))
+}
+
+/** Cash paid out: buy-backs, and the debit side of any roll that cost money. */
 export function buybackCost(t) {
   if (t.option_side !== 'sell') return null
-  const legs = positionLegs(t)
-  return round2(
-    legs.reduce((a, l) => a + (l.close_cost ?? 0) * OPTION_MULTIPLIER * (l.contracts ?? 0), 0),
-  )
+  const flows = optionCashFlows(t)
+  return round2(flows.reduce((a, f) => a + Math.min(f.amount ?? 0, 0), 0) * -1)
 }
 
 /** How many times this position has been rolled. */
@@ -496,7 +572,7 @@ export function percentOfMaxProfit(t) {
   if (t.option_side !== 'sell') return null
   const credit = creditReceived(t)
   if (credit === null || credit === 0) return null
-  // The most this campaign can make is every credit it took in.
+  // The most this campaign can keep is every dollar it ever took in.
   return ((credit - (buybackCost(t) ?? 0)) / Math.abs(credit)) * 100
 }
 

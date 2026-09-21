@@ -72,6 +72,19 @@ export default function TradeForm() {
   const [error, setError] = useState<unknown>(null)
   const [showGreeks, setShowGreeks] = useState(false)
   const [gradingStarted, setGradingStarted] = useState(isEdit)
+  /**
+   * Money fields the trader has actually typed into.
+   *
+   * Without this the form loaded a previously DERIVED P&L, sent it straight
+   * back on the next save, and the server quite reasonably recorded it as a
+   * hand-entered value. From then on it never recalculated, so a rolled
+   * position kept reporting a figure that no longer matched its own legs.
+   * A field counts as the trader's only once they touch it, or if it was
+   * already marked manual when the trade was loaded.
+   */
+  const [touchedMoney, setTouchedMoney] = useState<Set<string>>(new Set())
+  const touchMoney = (field: string) =>
+    setTouchedMoney((prev) => (prev.has(field) ? prev : new Set(prev).add(field)))
   const [loaded, setLoaded] = useState(!isEdit)
 
   const nextNo = useAsync(() => (isEdit ? Promise.resolve(null) : api.trades.nextNumber()), [isEdit])
@@ -86,6 +99,14 @@ export default function TradeForm() {
         for (const [k, v] of Object.entries(f)) if (v === null) f[k] = ''
         f.images = t.images ?? []
         f.rolls = (t.rolls ?? []).map((r: any) => ({ ...r }))
+        setTouchedMoney(
+          new Set(
+            String(t.manual_fields ?? '')
+              .split(',')
+              .map((x: string) => x.trim())
+              .filter(Boolean),
+          ),
+        )
         f.rule_checks = t.rule_checks ?? []
         f.tag_ids = (t.tags ?? []).map((tag) => tag.id)
         setForm(f)
@@ -205,11 +226,13 @@ export default function TradeForm() {
         images: form.images,
         rolls: form.rolls ?? [],
       }
-      // A blank money field means "derive it on the server", so drop the key
-      // entirely rather than sending null, which would be an explicit value.
-      for (const k of ['gross_pnl', 'net_pnl', 'risk_amount', 'outcome']) {
-        if (payload[k] === null || payload[k] === '') delete payload[k]
+      // A money field is only sent when the trader put it there. Sending one
+      // back that the app itself calculated would pin it as manual and stop it
+      // ever updating again. Blank likewise means "work it out".
+      for (const k of ['gross_pnl', 'net_pnl', 'risk_amount']) {
+        if (payload[k] === null || payload[k] === '' || !touchedMoney.has(k)) delete payload[k]
       }
+      if (payload.outcome === null || payload.outcome === '') delete payload.outcome
       const saved = isEdit ? await api.trades.update(Number(id), payload) : await api.trades.create(payload)
       navigate(`/trades/${saved.id}`)
     } catch (e) {
@@ -535,10 +558,37 @@ export default function TradeForm() {
               <CardHeader title="Result" subtitle="Leave blank to use the calculated value above" />
               <div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-5">
                 <Field label="Risk ($)" hint={riskPreview !== null && !form.risk_amount ? `Auto: ${money(riskPreview)}` : undefined}>
-                  <Input type="number" step="any" placeholder={riskPreview !== null ? String(riskPreview) : ''} value={form.risk_amount ?? ''} onChange={(e) => set({ risk_amount: e.target.value })} />
+                  <Input
+                    type="number"
+                    step="any"
+                    placeholder={riskPreview !== null ? String(riskPreview) : ''}
+                    value={form.risk_amount ?? ''}
+                    onChange={(e) => {
+                      touchMoney('risk_amount')
+                      set({ risk_amount: e.target.value })
+                    }}
+                  />
                 </Field>
-                <Field label="Net P&L ($)" hint={netPreview !== null && !form.net_pnl ? `Auto: ${money(netPreview)}` : undefined}>
-                  <Input type="number" step="any" placeholder={netPreview !== null ? String(netPreview) : ''} value={form.net_pnl ?? ''} onChange={(e) => set({ net_pnl: e.target.value })} />
+                <Field
+                  label="Net P&L ($)"
+                  hint={
+                    isOptions
+                      ? 'Calculated from the premiums. Type here only to override.'
+                      : netPreview !== null && !form.net_pnl
+                        ? `Auto: ${money(netPreview)}`
+                        : undefined
+                  }
+                >
+                  <Input
+                    type="number"
+                    step="any"
+                    placeholder={netPreview !== null ? String(netPreview) : ''}
+                    value={form.net_pnl ?? ''}
+                    onChange={(e) => {
+                      touchMoney('net_pnl')
+                      set({ net_pnl: e.target.value })
+                    }}
+                  />
                 </Field>
                 <Field label="R override" hint="Only if you grade R by hand">
                   <Input type="number" step="any" placeholder={rPreview !== null ? rPreview.toFixed(2) : ''} value={form.result_r_override ?? ''} onChange={(e) => set({ result_r_override: e.target.value })} />

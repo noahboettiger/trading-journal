@@ -452,7 +452,8 @@ function DataSection({ onRestored }: { onRestored: () => void }) {
 
 export default function Settings() {
   const reference = useReference()
-  const [tab, setTab] = useState<'journals' | 'rules' | 'lists' | 'data'>('journals')
+  // Rules and lists are what gets edited regularly; journals change rarely.
+  const [tab, setTab] = useState<'journals' | 'rules' | 'lists' | 'data'>('rules')
   const [activePlaybook, setActivePlaybook] = useState<number | null>(null)
 
   useEffect(() => {

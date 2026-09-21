@@ -229,34 +229,43 @@ detaching them.
 
 A roll is trade management, not a new trade. Buying back the contract in hand
 and selling another keeps the position going, so the journal keeps it as one
-record with a chain of legs.
+record and totals the cash across the whole campaign.
 
-On a premium-selling trade, the Position section has a **Roll history**. Each
-roll records what you paid to close the leg you were holding and the contract
-you opened in its place. From there:
+Rolls fill two different ways, and both are supported:
 
-- Credit sums every leg, so what you banked earlier is never lost
-- Collateral follows the contract you hold **now**, since a roll can move the
-  strike or the size
-- Days to expiration counts against the current leg
-- Days held covers the whole campaign, first entry to final close
-- Max profit captured measures against total credit taken in
+- **One net price.** A diagonal or calendar roll usually fills as a single combo
+  order, and the broker reports one net figure. Enter that: positive for a
+  credit, negative for a debit. This is the default.
+- **Two separate fills.** When you closed and reopened as separate orders, enter
+  both prices and both land in the ledger.
 
-Worked example. Sell a 90 put for 11.44, buy it back at 6.70 and roll into an 85
-for 9.20, then close that at 2.00:
+Everything else follows from the premiums. You never compute a difference
+yourself.
 
-| Leg | Contract | Credit in | Cost to close | Kept |
+Worked example, straight off a broker statement:
+
+| Date | Action | Contract | Price | Cash |
 | --- | --- | --- | --- | --- |
-| 1 | 90 Put | $1,144 | $670 | +$474 |
-| 2 | 85 Put | $920 | $200 | +$720 |
-| | | **$2,064** | **$870** | **+$1,194** |
+| Sep 9 | Opened | 95 Put, exp Oct 16 | 5.90 | +$590 |
+| Sep 10 | Rolled into | 90 Put, exp Nov 20 | 3.85 net | +$385 |
+| Sep 21 | Closed | | 6.70 | -$670 |
+| | | | **Net** | **+$305** |
 
-That is 57.8% of the maximum, right in a 50-60% buy-back target, over 143 days
-rather than the 105 the last leg alone would have shown.
+Across the chain, collateral follows the contract held **now** (a roll can move
+the strike or the size), days to expiration counts against the current leg, days
+held covers the whole campaign, and max profit captured measures against
+everything taken in.
 
 **An open position that has been rolled has no realised P&L.** Only closing the
-final leg realises it. A roll closes a leg while the position carries on, so a
-live rolled put shows what it has banked as credit taken in, not as a result.
+final leg realises it, since a roll closes a leg while the position carries on.
+
+### P&L is calculated, not typed
+
+For options the premiums are the source of truth: enter what you bought and sold
+at and the P&L, return on collateral and annualised return follow. The Net P&L
+field is an override, and it only takes effect if you type in it. Leaving it
+alone keeps the figure live, so correcting a premium later corrects everything
+downstream.
 
 ## Open and closed positions
 

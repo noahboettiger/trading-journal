@@ -4,7 +4,7 @@ import {
   deriveNetPnl, deriveGrossPnl, deriveRiskAmount, resultR, deriveOutcome, plannedRR,
   daysHeld, dteAtEntry, dteAtExit, returnOnRisk, num,
   collateralRequired, creditReceived, returnOnCollateral, annualisedReturn, percentOfMaxProfit,
-  buybackCost, positionLegs, currentLeg, rollCount,
+  buybackCost, positionLegs, currentLeg, rollCount, optionCashFlows,
 } from '../../shared/calc.js'
 
 /** Columns a client is allowed to write. Anything else in a payload is ignored. */
@@ -138,6 +138,7 @@ export function enrich(trade, { withChildren = true } = {}) {
     dte_exit: dteAtExit(trade),
     return_on_risk: returnOnRisk(trade),
     rolls,
+    cash_flows: optionCashFlows(trade),
     legs: positionLegs(trade),
     current_leg: currentLeg(trade),
     roll_count: rollCount(trade),
@@ -208,13 +209,14 @@ function replaceChildren(tradeId, body) {
     db.prepare('DELETE FROM trade_rolls WHERE trade_id = ?').run(tradeId)
     const ins = db.prepare(
       `INSERT INTO trade_rolls
-         (trade_id, rolled_on, close_cost, new_strike, new_expiration, new_contracts, new_credit, commissions, note, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (trade_id, rolled_on, net_credit, close_cost, new_strike, new_expiration, new_contracts, new_credit, commissions, note, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     body.rolls.forEach((r, i) =>
       ins.run(
         tradeId,
         r.rolled_on || null,
+        num(r.net_credit),
         num(r.close_cost),
         num(r.new_strike),
         r.new_expiration || null,
