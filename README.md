@@ -449,7 +449,21 @@ buying vs selling, ticker, session, day of week, timeframe, direction, source,
 execution grade, emotional state, mistake tag and playbook.
 
 **Session journal**: day-level notes separate from individual trades, with an
-optional starter template.
+eight-question starter template that splits across the trading day:
+
+1. **Daily bias**, written before the open: what you are specifically looking
+   for and why, with the branches spelled out if it is conditional. Only trades
+   that line up with what is written here are on the table.
+2. Sleep
+3. Stress outside of trading
+4. How you would rate the day overall
+5. The trades you took
+6. What perfect trading would have looked like
+7. The gap between that and what you actually did
+8. The one thing that closes the gap tomorrow
+
+Insert it in the morning, write the bias, and save. The rest is waiting when you
+come back after the close.
 
 ### Room to actually write
 

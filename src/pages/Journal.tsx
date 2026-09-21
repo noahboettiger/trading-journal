@@ -7,25 +7,30 @@ import { PageHeader } from '@/components/Layout'
 import { Card, CardHeader, Field, Input, Select, Textarea, Spinner, ErrorNote, EmptyState } from '@/components/ui'
 import { useJournal } from '@/lib/journals'
 
-const TEMPLATE = `How would I rate the day overall?
+// The bias is written before the open and the rest after the close, so the
+// numbering is the order they get filled in, not the order they were thought of.
+const TEMPLATE = `1. Daily bias (before the open). What am I specifically looking for today, and why? If it is conditional, write out the branches: if this happens, then I do this. Only trades that line up with what is written here are on the table.
 
 
-How was my sleep?
+2. How was my sleep?
 
 
-What else is going on in my life right now? Any stress outside of trading?
+3. What else is going on in my life right now? Any stress outside of trading?
 
 
-The trades I took:
+4. How would I rate the day overall?
 
 
-What would perfect trading have looked like today?
+5. The trades I took:
 
 
-What is the gap between that and what I actually did?
+6. What would perfect trading have looked like today?
 
 
-What one thing closes that gap tomorrow?
+7. What is the gap between that and what I actually did?
+
+
+8. What one thing closes that gap tomorrow?
 `
 
 interface Entry { id: number; entry_date: string; session: string | null; content: string; mood: string | null }
@@ -107,7 +112,7 @@ export default function Journal() {
                 )
               }
             >
-              <Textarea rows={18} value={draft.content} onChange={(e) => setDraft({ ...draft, content: e.target.value })} placeholder="How did the session go?" />
+              <Textarea rows={24} value={draft.content} onChange={(e) => setDraft({ ...draft, content: e.target.value })} placeholder="How did the session go?" />
             </Field>
           </div>
         </Card>
