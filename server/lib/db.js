@@ -305,6 +305,33 @@ const MIGRATIONS = [
   INSERT INTO app_meta (key, value)
     SELECT 'seeded_at', datetime('now') WHERE EXISTS (SELECT 1 FROM playbooks);
   `,
+
+  // 9 - rolls, as management of one position rather than separate trades
+  //
+  // A roll buys back the current contract and sells another. Splitting that
+  // into two trades loses the fact that it is one campaign, inflates the trade
+  // count and makes days held meaningless. Keeping only the final contract is
+  // worse: the credit already banked on earlier legs disappears.
+  //
+  // The trade's own contract fields stay the ORIGINAL leg, so nothing needs
+  // rewriting. Each roll records what it cost to close the leg in hand and the
+  // contract opened in its place. Totals sum across the chain.
+  `
+  CREATE TABLE trade_rolls (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    trade_id       INTEGER NOT NULL REFERENCES trades(id) ON DELETE CASCADE,
+    rolled_on      TEXT,
+    close_cost     REAL,
+    new_strike     REAL,
+    new_expiration TEXT,
+    new_contracts  REAL,
+    new_credit     REAL,
+    commissions    REAL NOT NULL DEFAULT 0,
+    note           TEXT,
+    sort_order     INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX idx_rolls_trade ON trade_rolls(trade_id, sort_order);
+  `,
 ]
 
 function migrate() {

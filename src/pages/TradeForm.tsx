@@ -14,12 +14,13 @@ import { Card, CardHeader, Field, Input, Select, Textarea, Badge, Spinner, Error
 import { RuleChecklist } from '@/components/RuleChecklist'
 import { ChartUpload } from '@/components/ChartUpload'
 import { ChipMultiSelect } from '@/components/ChipMultiSelect'
+import { RollEditor, type Roll } from '@/components/RollEditor'
 import { useJournal } from '@/lib/journals'
 import {
   deriveGrossPnl, deriveNetPnl, deriveRiskAmount, resultR,
   daysHeld, dteAtEntry, dteAtExit, returnOnRisk,
   collateralRequired, creditReceived, returnOnCollateral, annualisedReturn, percentOfMaxProfit,
-  parseMulti, joinMulti,
+  buybackCost, currentLeg, parseMulti, joinMulti,
 } from '@shared/calc.js'
 
 type FormState = Record<string, any>
@@ -35,6 +36,7 @@ const BLANK: FormState = {
   images: [] as TradeImage[],
   rule_checks: [] as RuleCheck[],
   tag_ids: [] as number[],
+  rolls: [] as Roll[],
 }
 
 /** Strings from inputs become numbers or null before any math or save. */
@@ -83,6 +85,7 @@ export default function TradeForm() {
         const f: FormState = { ...t }
         for (const [k, v] of Object.entries(f)) if (v === null) f[k] = ''
         f.images = t.images ?? []
+        f.rolls = (t.rolls ?? []).map((r: any) => ({ ...r }))
         f.rule_checks = t.rule_checks ?? []
         f.tag_ids = (t.tags ?? []).map((tag) => tag.id)
         setForm(f)
@@ -96,7 +99,7 @@ export default function TradeForm() {
   const isOptions = form.asset_class === 'options'
   const isSelling = isOptions && form.option_side === 'sell'
   const isCsp = isSelling && form.option_type === 'put'
-  const calc = useMemo(() => numeric(form), [form])
+  const calc = useMemo(() => ({ ...numeric(form), rolls: form.rolls ?? [] }), [form])
 
   // Live preview. Typed values win; blanks fall back to the derivation.
   const grossPreview = n(form.gross_pnl) ?? deriveGrossPnl(calc)
@@ -113,6 +116,9 @@ export default function TradeForm() {
   const collateralReturn = returnOnCollateral(sellCalc)
   const annualised = annualisedReturn(sellCalc)
   const maxProfitPct = percentOfMaxProfit(calc)
+  const buyback = buybackCost(calc)
+  const leg = currentLeg(calc)
+  const rollCount = (form.rolls as Roll[]).length
 
   /**
    * Attach the selected playbook's rules, snapshotting their text. Checks
@@ -197,6 +203,7 @@ export default function TradeForm() {
         rule_checks: form.rule_checks,
         tag_ids: form.tag_ids,
         images: form.images,
+        rolls: form.rolls ?? [],
       }
       // A blank money field means "derive it on the server", so drop the key
       // entirely rather than sending null, which would be an explicit value.
@@ -253,8 +260,16 @@ export default function TradeForm() {
           {(isSelling
             ? [
                 { label: 'Net P&L', value: netPreview === null ? '--' : money(netPreview, { sign: true }), cls: pnlClass(netPreview) },
-                { label: 'Credit taken in', value: creditPreview === null ? '--' : money(creditPreview), cls: 'text-ink' },
-                { label: 'Collateral', value: collateralPreview === null ? '--' : money(collateralPreview, { cents: false }), cls: 'text-ink' },
+                {
+                  label: rollCount ? `Credit (${rollCount + 1} legs)` : 'Credit taken in',
+                  value: creditPreview === null ? '--' : money(creditPreview),
+                  cls: 'text-ink',
+                },
+                {
+                  label: rollCount ? 'Collateral now' : 'Collateral',
+                  value: collateralPreview === null ? '--' : money(collateralPreview, { cents: false }),
+                  cls: 'text-ink',
+                },
                 { label: 'Return on collateral', value: collateralReturn === null ? '--' : pct(collateralReturn, 2), cls: pnlClass(collateralReturn) },
                 { label: 'Annualised', value: annualised === null ? '--' : pct(annualised, 1), cls: pnlClass(annualised) },
                 {
@@ -446,6 +461,33 @@ export default function TradeForm() {
                       <Input type="number" step="any" value={form.underlying_target ?? ''} onChange={(e) => set({ underlying_target: e.target.value })} />
                     </Field>
                   </div>
+
+                  {isSelling && (
+                    <div className="rounded-lg border border-line bg-surface-2/30 p-3">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <span className="label">Roll history</span>
+                        {rollCount > 0 && (
+                          <span className="text-[11px] text-ink-faint tnum">
+                            {rollCount} roll{rollCount === 1 ? '' : 's'} · now holding {leg.strike ?? '?'}P
+                            {leg.expiration ? ` exp ${leg.expiration}` : ''}
+                            {buyback ? ` · ${money(buyback)} paid to close legs` : ''}
+                          </span>
+                        )}
+                      </div>
+                      <p className="mb-3 text-[11px] leading-relaxed text-ink-faint">
+                        A roll stays part of this trade rather than becoming a new one, so the credit you already
+                        banked still counts and days held covers the whole campaign. The fields above describe the
+                        contract you opened with; the exit premium below closes whatever you are holding now.
+                      </p>
+                      <RollEditor
+                        rolls={form.rolls ?? []}
+                        onChange={(rolls) => set({ rolls })}
+                        openingStrike={form.strike ?? null}
+                        openingContracts={form.contracts ?? null}
+                        openingExpiration={form.expiration ?? ''}
+                      />
+                    </div>
+                  )}
 
                   <div>
                     <button type="button" className="btn-subtle !px-0" onClick={() => setShowGreeks((v) => !v)}>

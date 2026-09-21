@@ -4,6 +4,7 @@ import {
   deriveNetPnl, deriveGrossPnl, deriveRiskAmount, resultR, deriveOutcome, plannedRR,
   daysHeld, dteAtEntry, dteAtExit, returnOnRisk, num,
   collateralRequired, creditReceived, returnOnCollateral, annualisedReturn, percentOfMaxProfit,
+  buybackCost, positionLegs, currentLeg, rollCount,
 } from '../../shared/calc.js'
 
 /** Columns a client is allowed to write. Anything else in a payload is ignored. */
@@ -121,6 +122,13 @@ const providedColumns = (body) => new Set(TRADE_COLUMNS.filter((c) => c in body)
 /** Attach computed fields plus rule checks, tags and images. */
 export function enrich(trade, { withChildren = true } = {}) {
   if (!trade) return null
+
+  // Loaded first: credit, collateral and P&L all sum across the roll chain.
+  const rolls = db
+    .prepare('SELECT * FROM trade_rolls WHERE trade_id = ? ORDER BY sort_order, id')
+    .all(trade.id)
+  trade = { ...trade, rolls }
+
   const out = {
     ...trade,
     result_r: resultR(trade),
@@ -129,6 +137,11 @@ export function enrich(trade, { withChildren = true } = {}) {
     dte_entry: dteAtEntry(trade),
     dte_exit: dteAtExit(trade),
     return_on_risk: returnOnRisk(trade),
+    rolls,
+    legs: positionLegs(trade),
+    current_leg: currentLeg(trade),
+    roll_count: rollCount(trade),
+    buyback_cost: buybackCost(trade),
     collateral_required: collateralRequired(trade),
     credit_received: creditReceived(trade),
     return_on_collateral: returnOnCollateral(trade),
@@ -191,6 +204,29 @@ function replaceChildren(tradeId, body) {
     })
   }
 
+  if (Array.isArray(body.rolls)) {
+    db.prepare('DELETE FROM trade_rolls WHERE trade_id = ?').run(tradeId)
+    const ins = db.prepare(
+      `INSERT INTO trade_rolls
+         (trade_id, rolled_on, close_cost, new_strike, new_expiration, new_contracts, new_credit, commissions, note, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    body.rolls.forEach((r, i) =>
+      ins.run(
+        tradeId,
+        r.rolled_on || null,
+        num(r.close_cost),
+        num(r.new_strike),
+        r.new_expiration || null,
+        num(r.new_contracts),
+        num(r.new_credit),
+        num(r.commissions) ?? 0,
+        r.note ?? null,
+        r.sort_order ?? i,
+      ),
+    )
+  }
+
   if (Array.isArray(body.images)) {
     db.prepare('DELETE FROM trade_images WHERE trade_id = ?').run(tradeId)
     const ins = db.prepare('INSERT INTO trade_images (trade_id, path, caption, sort_order) VALUES (?, ?, ?, ?)')
@@ -201,7 +237,8 @@ function replaceChildren(tradeId, body) {
 }
 
 export function createTrade(body) {
-  const row = applyDerivations(normalise(body), providedColumns(body))
+  const row = applyDerivations({ ...normalise(body), rolls: body.rolls ?? [] }, providedColumns(body))
+  delete row.rolls
   if (!row.symbol) throw Object.assign(new Error('symbol is required'), { status: 400 })
   if (!row.trade_date) throw Object.assign(new Error('trade_date is required'), { status: 400 })
 
@@ -231,7 +268,13 @@ export function updateTrade(id, body) {
 
   // Derive against the merged record so editing one price recomputes the rest.
   const patch = normalise(body)
-  const merged = applyDerivations({ ...existing, ...patch }, providedColumns(body))
+  const existingRolls = db
+    .prepare('SELECT * FROM trade_rolls WHERE trade_id = ? ORDER BY sort_order, id')
+    .all(id)
+  const merged = applyDerivations(
+    { ...existing, ...patch, rolls: body.rolls ?? existingRolls },
+    providedColumns(body),
+  )
   for (const col of DERIVED_COLUMNS) {
     if (merged[col] !== existing[col]) patch[col] = merged[col]
   }

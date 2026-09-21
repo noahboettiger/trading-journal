@@ -64,6 +64,31 @@ export interface Lookup {
 export type Lookups = Partial<Record<LookupKind, Lookup[]>>
 
 export interface Tag { id: number; name: string; kind: string }
+
+export interface TradeRoll {
+  id?: number
+  rolled_on: string | null
+  close_cost: number | null
+  new_strike: number | null
+  new_expiration: string | null
+  new_contracts: number | null
+  new_credit: number | null
+  commissions: number
+  note: string | null
+  sort_order: number
+}
+
+export interface PositionLeg {
+  leg: number
+  opened_on: string | null
+  closed_on: string | null
+  strike: number | null
+  expiration: string | null
+  contracts: number | null
+  credit: number | null
+  close_cost: number | null
+  close_method: string | null
+}
 export interface TradeImage { id?: number; path: string; caption: string | null; sort_order: number }
 
 export interface Trade {
@@ -126,6 +151,11 @@ export interface Trade {
   dte_entry: number | null
   dte_exit: number | null
   return_on_risk: number | null
+  rolls: TradeRoll[]
+  legs: PositionLeg[]
+  current_leg: PositionLeg
+  roll_count: number
+  buyback_cost: number | null
   collateral_required: number | null
   credit_received: number | null
   return_on_collateral: number | null

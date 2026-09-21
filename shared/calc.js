@@ -28,6 +28,21 @@ export function deriveGrossPnl(t) {
   const sign = dirSign(t.direction)
 
   if (t.asset_class === 'options') {
+    if (t.option_side === 'sell') {
+      const credit = creditReceived(t)
+      if (credit === null) return null
+
+      // Only the FINAL leg being closed realises the position. Checking
+      // whether any leg had closed was wrong: a roll closes the leg in hand
+      // while the position carries on, so an open rolled put reported the
+      // credit it had banked so far as though it were a finished result.
+      const legs = positionLegs(t)
+      if (legs[legs.length - 1].close_cost === null) return null
+
+      // Credit banked across every leg, less what each cost to buy back. A
+      // position that was never rolled reduces to the usual one-leg case.
+      return round2(credit - (buybackCost(t) ?? 0))
+    }
     const entry = num(t.entry_premium)
     const exit = num(t.exit_premium)
     if (entry === null || exit === null || contracts === null) return null
@@ -275,9 +290,10 @@ export function dteAtEntry(t) {
 
 /** Days to expiration left when the position was closed (or today if open). */
 export function dteAtExit(t) {
-  if (!t.expiration) return null
+  const expiration = currentLeg(t).expiration ?? t.expiration
+  if (!expiration) return null
   const end = t.exit_date ?? (t.status === 'open' ? new Date().toISOString().slice(0, 10) : t.trade_date)
-  return daysBetween(end, t.expiration)
+  return daysBetween(end, expiration)
 }
 
 /** Return on the premium at risk, the number that matters for options. */
@@ -361,20 +377,91 @@ export function collateralRequired(t) {
   const explicit = num(t.collateral)
   if (explicit !== null) return explicit
   if (t.asset_class !== 'options' || t.option_side !== 'sell' || t.option_type !== 'put') return null
-  const strike = num(t.strike)
-  const contracts = num(t.contracts)
-  if (strike === null || contracts === null) return null
-  return round2(strike * OPTION_MULTIPLIER * contracts)
+  // A roll can move the strike or the size, so the capital tied up is the
+  // contract in hand, not the one this position started with.
+  const leg = currentLeg(t)
+  if (leg.strike === null || leg.contracts === null) return null
+  return round2(leg.strike * OPTION_MULTIPLIER * leg.contracts)
 }
 
-/** Credit taken in at open, before any buy-back. */
+/**
+ * Every contract this position has held, oldest first.
+ *
+ * Leg one is the trade's own contract fields; each roll closes the leg in hand
+ * and opens the next. A position that was never rolled is simply one leg, so
+ * the same arithmetic covers both cases.
+ */
+export function positionLegs(t) {
+  const legs = [
+    {
+      leg: 1,
+      opened_on: t.trade_date ?? null,
+      strike: num(t.strike),
+      expiration: t.expiration ?? null,
+      contracts: num(t.contracts),
+      credit: num(t.entry_premium),
+      close_cost: null,
+      closed_on: null,
+      close_method: null,
+      commissions: 0,
+    },
+  ]
+
+  const rolls = [...(t.rolls ?? [])].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+  rolls.forEach((roll, i) => {
+    const prev = legs[legs.length - 1]
+    prev.close_cost = num(roll.close_cost)
+    prev.closed_on = roll.rolled_on ?? null
+    prev.close_method = 'rolled'
+    legs.push({
+      leg: i + 2,
+      opened_on: roll.rolled_on ?? null,
+      strike: num(roll.new_strike) ?? prev.strike,
+      expiration: roll.new_expiration ?? prev.expiration,
+      contracts: num(roll.new_contracts) ?? prev.contracts,
+      credit: num(roll.new_credit),
+      close_cost: null,
+      closed_on: null,
+      close_method: null,
+      commissions: num(roll.commissions) ?? 0,
+    })
+  })
+
+  // The final leg is closed by the trade's own exit, if it has one.
+  const last = legs[legs.length - 1]
+  last.close_cost = num(t.exit_premium)
+  last.closed_on = t.exit_date ?? null
+  last.close_method = t.close_method ?? null
+  return legs
+}
+
+/** The contract currently held, which is the last leg of the chain. */
+export const currentLeg = (t) => {
+  const legs = positionLegs(t)
+  return legs[legs.length - 1]
+}
+
+/** Total credit taken in across every leg, before any buy-backs. */
 export function creditReceived(t) {
   if (t.option_side !== 'sell') return null
-  const premium = num(t.entry_premium)
-  const contracts = num(t.contracts)
-  if (premium === null || contracts === null) return null
-  return round2(premium * OPTION_MULTIPLIER * contracts)
+  const legs = positionLegs(t)
+  if (legs.every((l) => l.credit === null || l.contracts === null)) return null
+  return round2(
+    legs.reduce((a, l) => a + (l.credit ?? 0) * OPTION_MULTIPLIER * (l.contracts ?? 0), 0),
+  )
 }
+
+/** Total paid to buy back legs, including every roll along the way. */
+export function buybackCost(t) {
+  if (t.option_side !== 'sell') return null
+  const legs = positionLegs(t)
+  return round2(
+    legs.reduce((a, l) => a + (l.close_cost ?? 0) * OPTION_MULTIPLIER * (l.contracts ?? 0), 0),
+  )
+}
+
+/** How many times this position has been rolled. */
+export const rollCount = (t) => (t.rolls ?? []).length
 
 /** Percent return on the collateral posted. */
 export function returnOnCollateral(t) {
@@ -407,11 +494,10 @@ export function annualisedReturn(t, basePercent = null) {
  */
 export function percentOfMaxProfit(t) {
   if (t.option_side !== 'sell') return null
-  const entry = num(t.entry_premium)
-  const exit = num(t.exit_premium)
-  if (entry === null || entry === 0) return null
-  // An open position has captured nothing yet; treat a missing exit as zero.
-  return ((entry - (exit ?? 0)) / Math.abs(entry)) * 100
+  const credit = creditReceived(t)
+  if (credit === null || credit === 0) return null
+  // The most this campaign can make is every credit it took in.
+  return ((credit - (buybackCost(t) ?? 0)) / Math.abs(credit)) * 100
 }
 
 /**

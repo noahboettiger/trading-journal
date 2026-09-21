@@ -225,6 +225,39 @@ between journals from its Journal field.
 Deleting a journal that still holds trades is refused rather than quietly
 detaching them.
 
+## Rolling a position
+
+A roll is trade management, not a new trade. Buying back the contract in hand
+and selling another keeps the position going, so the journal keeps it as one
+record with a chain of legs.
+
+On a premium-selling trade, the Position section has a **Roll history**. Each
+roll records what you paid to close the leg you were holding and the contract
+you opened in its place. From there:
+
+- Credit sums every leg, so what you banked earlier is never lost
+- Collateral follows the contract you hold **now**, since a roll can move the
+  strike or the size
+- Days to expiration counts against the current leg
+- Days held covers the whole campaign, first entry to final close
+- Max profit captured measures against total credit taken in
+
+Worked example. Sell a 90 put for 11.44, buy it back at 6.70 and roll into an 85
+for 9.20, then close that at 2.00:
+
+| Leg | Contract | Credit in | Cost to close | Kept |
+| --- | --- | --- | --- | --- |
+| 1 | 90 Put | $1,144 | $670 | +$474 |
+| 2 | 85 Put | $920 | $200 | +$720 |
+| | | **$2,064** | **$870** | **+$1,194** |
+
+That is 57.8% of the maximum, right in a 50-60% buy-back target, over 143 days
+rather than the 105 the last leg alone would have shown.
+
+**An open position that has been rolled has no realised P&L.** Only closing the
+final leg realises it. A roll closes a leg while the position carries on, so a
+live rolled put shows what it has banked as credit taken in, not as a result.
+
 ## Open and closed positions
 
 The trade list separates positions that are still live from ones that are

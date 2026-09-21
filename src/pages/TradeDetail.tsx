@@ -1,7 +1,7 @@
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import {
   LineChart as ChartIcon, Pencil, ArrowLeft, Compass, Target, DollarSign,
-  Award, TrendingUp, Clock, CalendarClock, Star,
+  Award, TrendingUp, Clock, CalendarClock, Star, ArrowRight, RefreshCw,
 } from 'lucide-react'
 
 import { api } from '@/lib/api'
@@ -182,7 +182,16 @@ export default function TradeDetail() {
                   )}
                   {isSelling ? (
                     <>
-                      <FieldRow label="Credit taken in" value={money(trade.credit_received)} />
+                      {trade.roll_count > 0 && (
+                        <FieldRow label="Rolls" value={`${trade.roll_count}`} icon={<RefreshCw size={13} />} />
+                      )}
+                      <FieldRow
+                        label={trade.roll_count ? `Credit, all ${trade.roll_count + 1} legs` : 'Credit taken in'}
+                        value={money(trade.credit_received)}
+                      />
+                      {trade.roll_count > 0 && (
+                        <FieldRow label="Paid to close legs" value={money(trade.buyback_cost)} />
+                      )}
                       <FieldRow label="Collateral" value={money(trade.collateral_required, { cents: false })} />
                       <FieldRow
                         label="Return on collateral"
@@ -231,6 +240,69 @@ export default function TradeDetail() {
               {!!trade.commissions && <FieldRow label="Commissions" value={money(trade.commissions)} />}
           </div>
         </Card>
+
+        {trade.roll_count > 0 && (
+          <Card>
+            <CardHeader
+              title="Roll History"
+              icon={<RefreshCw size={15} />}
+              subtitle="One position managed over time, not separate trades"
+              right={<Badge tone="accent">{trade.roll_count} roll{trade.roll_count === 1 ? '' : 's'}</Badge>}
+            />
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] text-sm">
+                <thead>
+                  <tr className="border-b border-line text-left">
+                    {['Leg', 'Contract', 'Opened', 'Credit in', 'Closed', 'Cost to close', 'Kept'].map((h) => (
+                      <th key={h} className="label whitespace-nowrap px-4 py-2.5 font-semibold">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {trade.legs.map((leg) => {
+                    const creditIn = (leg.credit ?? 0) * 100 * (leg.contracts ?? 0)
+                    const costOut = (leg.close_cost ?? 0) * 100 * (leg.contracts ?? 0)
+                    const kept = leg.close_cost === null ? null : creditIn - costOut
+                    return (
+                      <tr key={leg.leg}>
+                        <td className="whitespace-nowrap px-4 py-2.5 font-semibold tnum">{leg.leg}</td>
+                        <td className="whitespace-nowrap px-4 py-2.5">
+                          {leg.strike ? `${num(leg.strike)} ${optionTypeLabel(trade.option_type)}` : '--'}
+                          {leg.expiration && (
+                            <span className="ml-2 text-[11px] text-ink-faint">exp {formatDay(leg.expiration, { month: 'short', day: 'numeric' })}</span>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-ink-muted tnum">
+                          {leg.opened_on ? formatDay(leg.opened_on, { month: 'short', day: 'numeric' }) : '--'}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-win tnum">{money(creditIn)}</td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-ink-muted tnum">
+                          {leg.closed_on ? formatDay(leg.closed_on, { month: 'short', day: 'numeric' }) : 'Still open'}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-ink-muted tnum">
+                          {leg.close_cost === null ? '--' : money(costOut)}
+                        </td>
+                        <td className={`whitespace-nowrap px-4 py-2.5 font-semibold tnum ${pnlClass(kept)}`}>
+                          {kept === null ? '--' : money(kept, { sign: true })}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-3 text-xs text-ink-muted">
+              <span className="font-semibold">{money(trade.credit_received)} taken in</span>
+              <ArrowRight size={13} className="text-ink-faint" />
+              <span>{money(trade.buyback_cost)} paid back</span>
+              <ArrowRight size={13} className="text-ink-faint" />
+              <span className={`font-semibold ${pnlClass(trade.net_pnl)}`}>{money(trade.net_pnl, { sign: true })} net</span>
+              <span className="ml-auto text-ink-faint">
+                {trade.days_held === null ? '' : `${trade.days_held} days across the campaign`}
+              </span>
+            </div>
+          </Card>
+        )}
 
         {/* Rules: the itemized checklist, read-only */}
         <Card>
