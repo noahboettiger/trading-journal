@@ -41,7 +41,7 @@ const LOOKUPS = {
   setup: [
     'Freestyle', 'iFVG Reversal', 'Mech Model', 'Break and Retest', '2022 Model', 'Unicorn Model',
   ],
-  style: ['Day Trade', 'Swing Trade', 'Scalp', 'Position'],
+  style: ['Day Trade', 'Swing Trade', 'Cash-Secured Put', 'Scalp', 'Position'],
   session: ['Asia', 'London', 'NY AM', 'NY PM', 'Overnight'],
   source: ['Prop', 'Personal', 'Eval', 'Live'],
   emotion: ['Calm', 'Focused', 'Confident', 'Anxious', 'Impatient', 'Frustrated', 'FOMO', 'Tired', 'Revenge'],
@@ -55,9 +55,13 @@ const MISTAKE_TAGS = [
 ]
 
 export function seedIfEmpty() {
-  const count = (t) => db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n
+  // One marker for the whole default set, rather than a per-table row count.
+  // A migration that inserts into any of these tables would otherwise make the
+  // database look already-seeded and skip everything else.
+  const marker = db.prepare("SELECT value FROM app_meta WHERE key = 'seeded_at'").get()
+  if (marker) return
 
-  if (count('playbooks') === 0) {
+  {
     const insertPlaybook = db.prepare(
       'INSERT INTO playbooks (name, asset_class, description, sort_order) VALUES (?, ?, ?, ?)',
     )
@@ -104,17 +108,20 @@ export function seedIfEmpty() {
     console.log('[seed] created default playbooks and rules')
   }
 
-  if (count('tags') === 0) {
-    const insertTag = db.prepare('INSERT INTO tags (name, kind) VALUES (?, ?)')
+  {
+    const insertTag = db.prepare('INSERT OR IGNORE INTO tags (name, kind) VALUES (?, ?)')
     MISTAKE_TAGS.forEach((name) => insertTag.run(name, 'mistake'))
     console.log('[seed] created default mistake tags')
   }
 
-  if (count('lookups') === 0) {
-    const insertLookup = db.prepare('INSERT INTO lookups (kind, value, sort_order) VALUES (?, ?, ?)')
+  {
+    // OR IGNORE because a later migration may already have added one of these.
+    const insertLookup = db.prepare('INSERT OR IGNORE INTO lookups (kind, value, sort_order) VALUES (?, ?, ?)')
     for (const [kind, values] of Object.entries(LOOKUPS)) {
       values.forEach((value, i) => insertLookup.run(kind, value, i))
     }
     console.log('[seed] created default dropdown lists')
   }
+
+  db.prepare("INSERT OR REPLACE INTO app_meta (key, value) VALUES ('seeded_at', datetime('now'))").run()
 }

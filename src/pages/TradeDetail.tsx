@@ -7,7 +7,7 @@ import {
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/hooks'
 import { money, rMultiple, pct, formatDay, pnlClass, ratio, num } from '@/lib/format'
-import { CLOSE_METHOD_LABELS } from '@/lib/instruments'
+import { CLOSE_METHOD_LABELS, optionTypeLabel } from '@/lib/instruments'
 import type { Trade } from '@/lib/types'
 import { PageHeader } from '@/components/Layout'
 import { Card, CardHeader, Badge, Spinner, ErrorNote, EmptyState } from '@/components/ui'
@@ -169,7 +169,7 @@ export default function TradeDetail() {
 
               {isOptions ? (
                 <>
-                  <FieldRow label="Contract" value={trade.strike ? `${num(trade.strike)} ${trade.option_type ?? ''}`.trim() : '--'} />
+                  <FieldRow label="Contract" value={trade.strike ? `${num(trade.strike)} ${optionTypeLabel(trade.option_type)}`.trim() : '--'} />
                   <FieldRow label="Side" value={trade.option_side === 'sell' ? 'Selling premium' : trade.option_side === 'buy' ? 'Buying premium' : '--'} />
                   <FieldRow label="Expiration" value={trade.expiration ? formatDay(trade.expiration) : '--'} icon={<CalendarClock size={13} />} />
                   <FieldRow label="Contracts" value={num(trade.contracts)} />

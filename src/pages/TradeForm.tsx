@@ -6,7 +6,7 @@ import { api } from '@/lib/api'
 import { useAsync, useReference } from '@/lib/hooks'
 import { money, rMultiple, pct, todayISO, pnlClass } from '@/lib/format'
 import {
-  pointValueFor, GRADES, ASSET_CLASSES, DIRECTIONS, OPTION_SIDES, STATUSES, CLOSE_METHODS,
+  pointValueFor, GRADES, ASSET_CLASSES, DIRECTIONS, OPTION_SIDES, OPTION_TYPES, STATUSES, CLOSE_METHODS,
 } from '@/lib/instruments'
 import type { RuleCheck, Trade, TradeImage } from '@/lib/types'
 import { PageHeader } from '@/components/Layout'
@@ -391,7 +391,7 @@ export default function TradeForm() {
                 <div className="space-y-4 p-5">
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <Field label="Call or put">
-                      <Select value={form.option_type ?? ''} options={['call', 'put']} placeholder="Select" onChange={(e) => set({ option_type: e.target.value })} />
+                      <Select value={form.option_type ?? ''} options={OPTION_TYPES} placeholder="Select" onChange={(e) => set({ option_type: e.target.value })} />
                     </Field>
                     <Field label="Buy or sell" hint="Drives the P&L sign">
                       <Select value={form.option_side ?? ''} options={OPTION_SIDES} placeholder="Select" onChange={(e) => set({ option_side: e.target.value })} />

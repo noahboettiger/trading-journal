@@ -37,6 +37,15 @@ export const DIRECTIONS = [
   { value: 'long', label: 'Long / Bullish' },
   { value: 'short', label: 'Short / Bearish' },
 ]
+/** Stored lowercase for backwards compatibility; shown capitalised. */
+export const OPTION_TYPES = [
+  { value: 'call', label: 'Call' },
+  { value: 'put', label: 'Put' },
+]
+
+export const optionTypeLabel = (value: string | null | undefined) =>
+  OPTION_TYPES.find((t) => t.value === value)?.label ?? value ?? ''
+
 export const OPTION_SIDES = [
   { value: 'buy', label: 'Buying premium' },
   { value: 'sell', label: 'Selling premium' },

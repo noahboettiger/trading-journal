@@ -272,6 +272,39 @@ const MIGRATIONS = [
 
   CREATE INDEX idx_trades_journal ON trades(journal_id, trade_date DESC);
   `,
+
+  // 7 - Cash-Secured Put is its own style, not a flavour of swing trading
+  //
+  // Placed after Swing Trade rather than appended, since it belongs with the
+  // other options holding periods. Any styles added by hand keep their order.
+  `
+  INSERT OR IGNORE INTO lookups (kind, value, sort_order) VALUES ('style', 'Cash-Secured Put', 2);
+
+  UPDATE lookups SET sort_order = 0 WHERE kind = 'style' AND value = 'Day Trade';
+  UPDATE lookups SET sort_order = 1 WHERE kind = 'style' AND value = 'Swing Trade';
+  UPDATE lookups SET sort_order = 2 WHERE kind = 'style' AND value = 'Cash-Secured Put';
+  UPDATE lookups SET sort_order = 3 WHERE kind = 'style' AND value = 'Scalp';
+  UPDATE lookups SET sort_order = 4 WHERE kind = 'style' AND value = 'Position';
+
+  UPDATE journals SET default_trade_style = 'Cash-Secured Put' WHERE kind = 'options_csp';
+  `,
+
+  // 8 - record explicitly whether first-run defaults have been installed
+  //
+  // Seeding used to be guarded by "is this table empty", which broke the moment
+  // a migration inserted into the same table: on a brand new database,
+  // migration 7 added one style row, the guard saw a non-empty table, and the
+  // whole default set (playbooks, rules, lists) was skipped. A marker is
+  // independent of whatever else has written rows.
+  //
+  // Databases that already carry a playbook were seeded long ago, so they are
+  // marked here rather than being seeded a second time.
+  `
+  CREATE TABLE app_meta (key TEXT PRIMARY KEY, value TEXT);
+
+  INSERT INTO app_meta (key, value)
+    SELECT 'seeded_at', datetime('now') WHERE EXISTS (SELECT 1 FROM playbooks);
+  `,
 ]
 
 function migrate() {
