@@ -64,6 +64,7 @@ export const api = {
   stats: (f: TradeFilters = {}) => req<Stats>(`/api/stats${qs(f)}`),
   journalList: (f: TradeFilters = {}) => req<any[]>(`/api/journal${qs(f)}`),
   journalSave: (body: unknown) => req<any>('/api/journal', { method: 'PUT', body: JSON.stringify(body) }),
+  journalDelete: (id: number) => req<void>(`/api/journal/${id}`, { method: 'DELETE' }),
   upload: async (files: File[]) => {
     const fd = new FormData()
     files.forEach((f) => fd.append('files', f))

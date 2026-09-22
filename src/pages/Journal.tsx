@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Save, NotebookPen } from 'lucide-react'
+import { Save, NotebookPen, Trash2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAsync, useReference } from '@/lib/hooks'
 import { formatDay, todayISO } from '@/lib/format'
@@ -46,6 +46,12 @@ export default function Journal() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<unknown>(null)
 
+  // The entry already filed under the open date and session, if there is one.
+  // Saving edits that entry rather than filing a second one beside it.
+  const current = (entries ?? []).find(
+    (e) => e.entry_date === draft.entry_date && (e.session ?? '') === draft.session,
+  )
+
   // Load an existing entry when the date or session selection changes.
   useEffect(() => {
     const match = (entries ?? []).find(
@@ -72,6 +78,18 @@ export default function Journal() {
     }
   }
 
+  const remove = async (entry: Entry) => {
+    if (!confirm(`Delete the entry for ${formatDay(entry.entry_date)}? This cannot be undone.`)) return
+    setSaveError(null)
+    try {
+      await api.journalDelete(entry.id)
+      if (entry.id === current?.id) setDraft((d) => ({ ...d, content: '', mood: '' }))
+      await reload()
+    } catch (e) {
+      setSaveError(e)
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -84,9 +102,16 @@ export default function Journal() {
             title="Write"
             icon={<NotebookPen size={15} />}
             right={
-              <button className="btn-primary" onClick={save} disabled={saving || !draft.content.trim()}>
-                <Save size={14} /> {saving ? 'Saving...' : 'Save entry'}
-              </button>
+              <div className="flex items-center gap-2">
+                {current && (
+                  <button className="btn-danger" onClick={() => remove(current)} title="Delete this entry">
+                    <Trash2 size={14} /> Delete
+                  </button>
+                )}
+                <button className="btn-primary" onClick={save} disabled={saving || !draft.content.trim()}>
+                  <Save size={14} /> {saving ? 'Saving...' : current ? 'Update entry' : 'Save entry'}
+                </button>
+              </div>
             }
           />
           <div className="space-y-4 p-5">
@@ -128,9 +153,9 @@ export default function Journal() {
           ) : (
             <ul className="max-h-[640px] divide-y divide-line overflow-y-auto">
               {entries.map((e) => (
-                <li key={e.id}>
+                <li key={e.id} className={`flex items-start transition hover:bg-surface-2 ${e.id === current?.id ? 'bg-surface-2' : ''}`}>
                   <button
-                    className="w-full px-4 py-3 text-left transition hover:bg-surface-2"
+                    className="min-w-0 flex-1 px-4 py-3 text-left"
                     onClick={() => setDraft({ entry_date: e.entry_date, session: e.session ?? '', content: e.content, mood: e.mood ?? '' })}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -138,6 +163,13 @@ export default function Journal() {
                       {e.session && <span className="text-[11px] text-ink-faint">{e.session}</span>}
                     </div>
                     <p className="mt-0.5 line-clamp-2 text-xs text-ink-faint">{e.content.replace(/\s+/g, ' ').slice(0, 120)}</p>
+                  </button>
+                  <button
+                    className="mr-2 mt-3 shrink-0 rounded p-1.5 text-ink-faint transition hover:bg-loss/15 hover:text-loss"
+                    onClick={() => remove(e)}
+                    aria-label={`Delete the entry for ${e.entry_date}`}
+                  >
+                    <Trash2 size={14} />
                   </button>
                 </li>
               ))}

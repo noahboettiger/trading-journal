@@ -465,6 +465,12 @@ eight-question starter template that splits across the trading day:
 Insert it in the morning, write the bias, and save. The rest is waiting when you
 come back after the close.
 
+There is **one entry per journal, per day, per session**. Saving the same day a
+second time edits what is already there rather than filing a copy beside it, and
+the button says **Update entry** once an entry exists so you can see which way it
+will go. Any entry can be deleted, from the editor or from the list of past
+entries.
+
 ### Room to actually write
 
 Every trade carries four separate long-form fields rather than one notes box:

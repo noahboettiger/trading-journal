@@ -17,6 +17,9 @@ db.exec('PRAGMA foreign_keys = ON')
 /**
  * Ordered, append-only migrations. Never edit a migration that has shipped;
  * add a new one instead. Tracked via SQLite's built-in user_version.
+ *
+ * A step is either a SQL string or a function, for the rare migration that has
+ * to read existing rows before deciding how to rewrite them.
  */
 const MIGRATIONS = [
   // 1 - core schema
@@ -360,6 +363,76 @@ const MIGRATIONS = [
   );
   CREATE INDEX idx_exits_trade ON trade_exits(trade_id, sort_order);
   `,
+
+  // 12 - one journal entry per slot, for real this time
+  //
+  // The table carried UNIQUE (entry_date, session), and SQLite treats NULLs in
+  // a unique index as distinct from each other. With no session picked, which
+  // is the normal case for a daily recap, nothing ever conflicted: the upsert
+  // fell through to an insert and every save left another copy behind. The key
+  // also left out journal_id, so a Day Trading entry and a Swing Trading entry
+  // on the same date and session overwrote each other instead.
+  //
+  // The slot is (journal_id, entry_date, session) with the blanks coalesced, so
+  // it means the same thing whether or not a session is set.
+  (db) => {
+    const rows = db
+      .prepare('SELECT * FROM journal_entries ORDER BY id')
+      .all()
+
+    const slots = new Map()
+    for (const row of rows) {
+      const key = `${row.journal_id ?? 0}|${row.entry_date}|${row.session ?? ''}`
+      if (!slots.has(key)) slots.set(key, [])
+      slots.get(key).push(row)
+    }
+
+    // Fold duplicates together rather than picking a winner: the fullest copy
+    // is almost always a later edit of the others, so anything it already
+    // contains is dropped and anything it does not is kept on the end.
+    for (const group of slots.values()) {
+      if (group.length < 2) continue
+      const sorted = [...group].sort(
+        (a, b) =>
+          (b.content ?? '').length - (a.content ?? '').length ||
+          String(b.updated_at).localeCompare(String(a.updated_at)) ||
+          b.id - a.id,
+      )
+      const [keeper, ...rest] = sorted
+      let content = keeper.content ?? ''
+      for (const other of rest.sort((a, b) => a.id - b.id)) {
+        const text = (other.content ?? '').trim()
+        if (text && !content.includes(text)) content = `${content.trimEnd()}\n\n${text}`
+      }
+      db.prepare("UPDATE journal_entries SET content = ?, updated_at = datetime('now') WHERE id = ?")
+        .run(content, keeper.id)
+      for (const other of rest) {
+        db.prepare('DELETE FROM journal_entries WHERE id = ?').run(other.id)
+      }
+    }
+
+    // SQLite cannot drop a table constraint, so the table is rebuilt without it.
+    db.exec(`
+      CREATE TABLE journal_entries_rebuilt (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        entry_date TEXT NOT NULL,
+        session    TEXT,
+        content    TEXT,
+        mood       TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        journal_id INTEGER REFERENCES journals(id) ON DELETE SET NULL
+      );
+      INSERT INTO journal_entries_rebuilt
+        (id, entry_date, session, content, mood, created_at, updated_at, journal_id)
+        SELECT id, entry_date, session, content, mood, created_at, updated_at, journal_id
+          FROM journal_entries;
+      DROP TABLE journal_entries;
+      ALTER TABLE journal_entries_rebuilt RENAME TO journal_entries;
+      CREATE UNIQUE INDEX idx_journal_slot
+        ON journal_entries (entry_date, COALESCE(session, ''), COALESCE(journal_id, 0));
+    `)
+  },
 ]
 
 function migrate() {
@@ -367,7 +440,9 @@ function migrate() {
   for (let v = current; v < MIGRATIONS.length; v++) {
     db.exec('BEGIN')
     try {
-      db.exec(MIGRATIONS[v])
+      const step = MIGRATIONS[v]
+      if (typeof step === 'function') step(db)
+      else db.exec(step)
       db.exec(`PRAGMA user_version = ${v + 1}`)
       db.exec('COMMIT')
       console.log(`[db] applied migration ${v + 1}`)
