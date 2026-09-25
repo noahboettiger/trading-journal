@@ -1,5 +1,6 @@
 import { db } from './db.js'
 import { backupSoon } from './backup.js'
+import { riskCapFor } from './settings.js'
 import {
   deriveNetPnl, deriveGrossPnl, deriveRiskAmount, resultR, deriveOutcome, plannedRR,
   daysHeld, dteAtEntry, dteAtExit, returnOnRisk, num,
@@ -17,6 +18,7 @@ export const TRADE_COLUMNS = [
   'close_method', 'collateral',
   'underlying_entry', 'underlying_stop', 'underlying_target', 'dte_at_entry',
   'delta', 'theta', 'vega', 'iv_at_entry',
+  'account_type', 'risk_cap',
   'risk_amount', 'planned_rr', 'gross_pnl', 'commissions', 'net_pnl', 'result_r_override',
   'execution_grade', 'trade_rating', 'emotional_state', 'thesis', 'notes', 'lesson_learned', 'reflections',
 ]
@@ -25,7 +27,7 @@ const NUMERIC_COLUMNS = new Set([
   'journal_id', 'playbook_id', 'contracts', 'entry_price', 'exit_price', 'stop_price',
   'target_price', 'point_value', 'strike', 'entry_premium', 'exit_premium',
   'underlying_entry', 'underlying_stop', 'underlying_target', 'dte_at_entry',
-  'delta', 'theta', 'vega', 'iv_at_entry', 'collateral', 'risk_amount', 'planned_rr', 'gross_pnl',
+  'delta', 'theta', 'vega', 'iv_at_entry', 'collateral', 'risk_cap', 'risk_amount', 'planned_rr', 'gross_pnl',
   'commissions', 'net_pnl', 'result_r_override',
 ])
 
@@ -48,7 +50,7 @@ function normalise(body) {
 
 const DERIVED_COLUMNS = [
   'gross_pnl', 'net_pnl', 'planned_rr', 'risk_amount', 'collateral', 'outcome',
-  'commissions', 'manual_fields',
+  'commissions', 'manual_fields', 'risk_cap',
 ]
 
 /**
@@ -112,6 +114,11 @@ function applyDerivations(row, provided = new Set()) {
   if (!provided.has('outcome')) {
     const v = deriveOutcome({ ...row, outcome: null })
     if (v !== null) row.outcome = v
+  }
+  // The cap follows the account phase unless one was sent outright, and is
+  // stored per trade so later changes in Settings leave the past alone.
+  if (!provided.has('risk_cap') && row.account_type) {
+    row.risk_cap = riskCapFor(row.account_type)
   }
 
   row.manual_fields = [...manual].join(',')
@@ -363,6 +370,7 @@ export function listTrades(q = {}) {
   eq('trade_rating', q.trade_rating)
   eq('execution_grade', q.execution_grade)
   eq('trade_source', q.trade_source)
+  eq('account_type', q.account_type)
   eq('status', q.status)
   if (q.symbol) {
     where.push('UPPER(symbol) = UPPER(?)')

@@ -328,15 +328,29 @@ you need:
   Retest, 2022 Model, Unicorn Model, and anything else you add
 - **Buy or sell** (options), so "show me every premium-selling trade and what it
   returned" is one filter, not a separate tracker
+- **Account type** (futures), eval or funded, which sets the risk cap the trade is
+  graded against and is filterable on its own
+
+### Two separate ratings
+
+**Trade rating** is the quality of the setup itself. **Execution grade** is how well
+you handled it. They are deliberately separate, because an A+ setup traded badly and
+a C setup traded perfectly are different problems.
+
+Both use the same scale: **A+, A, A-, B+, B, B-, C, F**. A real trade lands somewhere
+between A+ and C. F is not the bottom of that range so much as off it: the rating for
+a trade that was gambling rather than a trade.
 
 Entry model, style, session, source, emotional state and timeframe are all **editable
 lists** you manage in Settings. Adding a new setup never requires a code change.
 
 ### Futures fields
 
-Contracts, entry, exit, stop, target and point value. Point value auto-fills for
+Account type, contracts, entry, exit and point value. Point value auto-fills for
 common symbols (MNQ, ES, GC, CL and friends) and stays editable. P&L, dollar risk and
 planned R:R are computed from those, and every one of them can be overridden by hand.
+Account type is eval or funded, and it decides the risk cap the rule grades against
+(see below).
 
 ### Options fields
 
@@ -390,7 +404,7 @@ Two playbooks ship by default:
 | Model Compliance | Clear, defined HTF draw on liquidity identified |
 | Model Compliance | Trade taken in the direction of the defined HTF draw on liquidity |
 | Model Compliance | Entry trigger: 1m-5m IFVG closure with CSD confirmed |
-| Risk Management | Risk strictly locked at $250 maximum |
+| Risk Management | Risk strictly locked at {risk_cap} maximum |
 | Risk Management | Target meets minimum 1.5:1 risk to reward |
 | Risk Management | Stop loss placed at the swing low/high |
 
@@ -418,6 +432,33 @@ Two playbooks ship by default:
 Every one of these is editable in Settings, and you can add playbooks of your own.
 Switching the instrument type on the form moves the playbook with it, so a put never
 gets graded against the futures checklist.
+
+#### The risk cap follows the account phase
+
+An eval is there to be cleared, not nursed for months, so the dollar cap is
+bigger while one is running and drops back once the account is funded. Set
+**Account type** on a futures trade and the risk rule follows it:
+
+| Account type | Cap the rule grades against |
+| --- | --- |
+| Eval | $500 |
+| Funded | $250 |
+
+Both figures live in Settings under **Risk caps**, along with which phase a new
+trade starts on, so moving to $400 and $200 later is two fields and no code.
+
+The rule text stores a `{risk_cap}` token rather than a figure, and each trade
+stores the cap it was actually held to. So raising a cap changes what new trades
+are graded against and leaves every trade already logged reading exactly what it
+was held to at the time. Trades logged before this existed keep the literal $250
+they were graded against.
+
+The form also says when the risk on the trade is over the cap for the phase you
+picked, and the review card shows risk as **$480 of $500**, so the comparison is
+there without you doing the arithmetic.
+
+Analytics breaks performance down by account type, which is the number that
+answers whether the bigger eval cap is actually clearing evals.
 
 #### Editing rules never rewrites history
 

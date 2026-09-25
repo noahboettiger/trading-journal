@@ -28,7 +28,18 @@ export const pointValueFor = (symbol: string | null | undefined): number | null 
  * execution grade judges what you did with it. Same scale so the two can be
  * compared directly, for example an A+ setup you executed as a B-.
  */
-export const GRADES = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C']
+// F is not the bottom of the scale so much as off it: a real trade grades
+// somewhere between A+ and C, and anything that was gambling is an F.
+export const GRADES = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C', 'F']
+
+// Prop accounts only. The phase decides which dollar cap the risk rule is
+// graded against, since an eval is meant to be cleared rather than nursed.
+export const ACCOUNT_TYPES = [
+  { value: 'funded', label: 'Funded' },
+  { value: 'eval', label: 'Eval' },
+]
+export const accountTypeLabel = (value: string | null | undefined) =>
+  ACCOUNT_TYPES.find((a) => a.value === value)?.label ?? value ?? ''
 export const ASSET_CLASSES = [
   { value: 'futures', label: 'Futures' },
   { value: 'options', label: 'Options' },

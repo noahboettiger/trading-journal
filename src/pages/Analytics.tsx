@@ -220,6 +220,12 @@ export default function Analytics() {
             keyField="rating"
           />
           <BreakdownTable title="By trade style" subtitle="Day trading vs swing trading" rows={stats.byStyle} keyField="style" />
+          <BreakdownTable
+            title="By account type"
+            subtitle="Whether the bigger eval cap is actually clearing evals"
+            rows={stats.byAccountType}
+            keyField="accountType"
+          />
           <BreakdownTable title="By instrument type" rows={stats.byAssetClass} keyField="assetClass" />
           <BreakdownTable title="Options: buying vs selling premium" rows={stats.byOptionSide} keyField="side" />
           <BreakdownTable title="By ticker" rows={stats.bySymbol} keyField="symbol" />

@@ -14,7 +14,7 @@ const FUTURES_RULES = [
   ['Model Compliance', 'Trade taken in the direction of the defined HTF draw on liquidity', 'No countertrend entries against your own identified draw.', 1],
   ['Model Compliance', 'Entry trigger: 1m-5m IFVG closure with CSD confirmed', 'Inverse fair value gap closure on the 1, 2, 3, 4 or 5 minute chart, with change in state of delivery confirmation.', 1],
 
-  ['Risk Management', 'Risk strictly locked at $250 maximum', 'Hard dollar cap per trade.', 1],
+  ['Risk Management', 'Risk strictly locked at {risk_cap} maximum', 'Hard dollar cap per trade. The figure follows the account type: evals get the bigger number, funded accounts the smaller one.', 1],
   ['Risk Management', 'Target meets minimum 1.5:1 risk to reward', 'Planned target had to pay at least 1.5R before you took the entry.', 1],
   ['Risk Management', 'Stop loss placed at the swing low/high', 'Stop sits behind real structure, not at an arbitrary dollar distance.', 1],
 ]

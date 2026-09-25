@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from './api'
-import type { Lookups, Playbook, Tag } from './types'
+import type { AppSettings, Lookups, Playbook, Tag } from './types'
+
+/** Used until the real settings land, so the first render has real numbers. */
+const DEFAULT_SETTINGS: AppSettings = {
+  risk_cap_funded: 250,
+  risk_cap_eval: 500,
+  account_type_default: 'funded',
+}
 
 /** Run an async fetch, exposing data/loading/error plus a manual reload. */
 export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = []) {
@@ -45,13 +52,17 @@ export function useReference() {
   const [lookups, setLookups] = useState<Lookups>({})
   const [playbooks, setPlaybooks] = useState<Playbook[]>([])
   const [tags, setTags] = useState<Tag[]>([])
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
   const [loading, setLoading] = useState(true)
 
   const reload = useCallback(async () => {
-    const [l, p, t] = await Promise.all([api.lookups.grouped(), api.playbooks.list(), api.tags.list('mistake')])
+    const [l, p, t, s] = await Promise.all([
+      api.lookups.grouped(), api.playbooks.list(), api.tags.list('mistake'), api.settings.get(),
+    ])
     setLookups(l)
     setPlaybooks(p)
     setTags(t)
+    setSettings(s)
     setLoading(false)
   }, [])
 
@@ -64,7 +75,18 @@ export function useReference() {
     [lookups],
   )
 
-  return { lookups, playbooks, tags, loading, reload, values, setTags }
+  /** The dollar cap a trade in this account phase is graded against. */
+  const riskCapFor = useCallback(
+    (accountType: string | null | undefined) =>
+      accountType === 'eval'
+        ? settings.risk_cap_eval
+        : accountType === 'funded'
+          ? settings.risk_cap_funded
+          : null,
+    [settings],
+  )
+
+  return { lookups, playbooks, tags, settings, loading, reload, values, setTags, riskCapFor }
 }
 
 /** Debounce any fast-changing value (search boxes, filter inputs). */

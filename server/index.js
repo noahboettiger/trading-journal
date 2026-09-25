@@ -16,6 +16,7 @@ import { tagsRouter } from './routes/tags.js'
 import { statsRouter } from './routes/stats.js'
 import { uploadsRouter } from './routes/uploads.js'
 import { journalRouter } from './routes/journal.js'
+import { settingsRouter } from './routes/settings.js'
 import { exportAll, importAll, snapshot, startAutoBackup, snapshotDir, backupNow } from './lib/backup.js'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -37,6 +38,7 @@ app.use('/api/tags', tagsRouter)
 app.use('/api/stats', statsRouter)
 app.use('/api/uploads', uploadsRouter)
 app.use('/api/journal', journalRouter)
+app.use('/api/settings', settingsRouter)
 
 app.get('/api/backup', (_req, res) => {
   res.setHeader('Content-Disposition', `attachment; filename="journal-backup-${new Date().toISOString().slice(0, 10)}.json"`)

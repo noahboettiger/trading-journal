@@ -1,4 +1,4 @@
-import type { Journal, Lookup, Lookups, Playbook, Stats, Tag, Trade } from './types'
+import type { AppSettings, Journal, Lookup, Lookups, Playbook, Stats, Tag, Trade } from './types'
 
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -60,6 +60,11 @@ export const api = {
   tags: {
     list: (kind?: string) => req<Tag[]>(`/api/tags${qs({ kind })}`),
     create: (name: string, kind = 'mistake') => req<Tag>('/api/tags', { method: 'POST', body: JSON.stringify({ name, kind }) }),
+  },
+  settings: {
+    get: () => req<AppSettings>('/api/settings'),
+    save: (patch: Partial<AppSettings>) =>
+      req<AppSettings>('/api/settings', { method: 'PUT', body: JSON.stringify(patch) }),
   },
   stats: (f: TradeFilters = {}) => req<Stats>(`/api/stats${qs(f)}`),
   journalList: (f: TradeFilters = {}) => req<any[]>(`/api/journal${qs(f)}`),

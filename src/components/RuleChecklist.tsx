@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Check, TriangleAlert } from 'lucide-react'
 import type { RuleCheck } from '@/lib/types'
+import { resolveRuleText } from '@shared/calc.js'
 import { Badge } from './ui'
 
 /**
@@ -14,10 +15,13 @@ export function RuleChecklist({
   readOnly = false,
   showViolations = readOnly,
   columns = false,
+  riskCap = null,
 }: {
   checks: RuleCheck[]
   onChange?: (next: RuleCheck[]) => void
   readOnly?: boolean
+  /** The dollar cap this trade is graded against, for the {risk_cap} token. */
+  riskCap?: number | null
   /** Lay the sections out side by side, for a full-width card. */
   columns?: boolean
   /**
@@ -106,7 +110,7 @@ export function RuleChecklist({
 
                       <div className="min-w-0 flex-1">
                         <p className={`text-sm leading-snug ${check.checked ? 'text-ink' : 'text-ink-muted'}`}>
-                          {check.rule_text}
+                          {resolveRuleText(check.rule_text, riskCap)}
                           {check.is_critical && (
                             <span className="ml-1.5 align-middle text-[10px] font-bold text-ink-faint" title="Critical rule">
                               ●

@@ -3,7 +3,8 @@ import { Plus, Trash2, GripVertical, Save, Download, Upload, AlertTriangle, Data
 
 import { api } from '@/lib/api'
 import { useReference } from '@/lib/hooks'
-import type { Playbook, Rule, LookupKind, Journal } from '@/lib/types'
+import type { AppSettings, Playbook, Rule, LookupKind, Journal } from '@/lib/types'
+import { ACCOUNT_TYPES } from '@/lib/instruments'
 import { useJournal } from '@/lib/journals'
 import { PageHeader } from '@/components/Layout'
 import { Card, CardHeader, Field, Input, Select, Spinner, ErrorNote, Badge, Segmented } from '@/components/ui'
@@ -163,6 +164,87 @@ const JOURNAL_KINDS = [
  * Journals are separate books. Each holds its own trades and its own numbers,
  * so a long premium-selling position never distorts a day-trading win rate.
  */
+/**
+ * The dollar caps the risk rule is graded against, one per account phase.
+ *
+ * An eval gets the bigger number deliberately: it is there to be cleared, not
+ * nursed for months. Each trade stores the cap it was held to when it was
+ * logged, so changing these never rewrites how an old trade was graded.
+ */
+function RiskCapEditor({ reference }: { reference: ReturnType<typeof useReference> }) {
+  const [draft, setDraft] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<unknown>(null)
+
+  const stored = (key: keyof AppSettings) => String(reference.settings[key] ?? '')
+  const value = (key: keyof AppSettings) => draft[key] ?? stored(key)
+  const dirty = (Object.keys(draft) as (keyof AppSettings)[]).some((k) => draft[k] !== stored(k))
+
+  const save = async () => {
+    setSaving(true)
+    setError(null)
+    try {
+      await api.settings.save({
+        risk_cap_funded: Number(value('risk_cap_funded')),
+        risk_cap_eval: Number(value('risk_cap_eval')),
+        account_type_default: value('account_type_default'),
+      })
+      await reference.reload()
+      setDraft({})
+    } catch (e) {
+      setError(e)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader
+        title="Risk caps"
+        subtitle="What the risk rule grades against, per account phase"
+        right={
+          <button className="btn-primary" onClick={save} disabled={saving || !dirty}>
+            {saving ? 'Saving...' : 'Save caps'}
+          </button>
+        }
+      />
+      <div className="space-y-4 p-5">
+        <ErrorNote error={error} />
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field label="Funded cap ($)" hint="Your standing risk per trade">
+            <Input
+              type="number"
+              step="any"
+              value={value('risk_cap_funded')}
+              onChange={(e) => setDraft({ ...draft, risk_cap_funded: e.target.value })}
+            />
+          </Field>
+          <Field label="Eval cap ($)" hint="Doubled to clear an eval rather than nurse it">
+            <Input
+              type="number"
+              step="any"
+              value={value('risk_cap_eval')}
+              onChange={(e) => setDraft({ ...draft, risk_cap_eval: e.target.value })}
+            />
+          </Field>
+          <Field label="New trades default to" hint="Whichever phase you are mostly in">
+            <Select
+              value={value('account_type_default')}
+              options={ACCOUNT_TYPES}
+              onChange={(e) => setDraft({ ...draft, account_type_default: e.target.value })}
+            />
+          </Field>
+        </div>
+        <p className="text-[11px] leading-relaxed text-ink-faint">
+          A futures trade stores the cap it was held to when you logged it, so raising a cap here changes what new
+          trades are graded against and leaves everything already logged exactly as it was.
+        </p>
+      </div>
+    </Card>
+  )
+}
+
 function JournalsEditor({ playbooks }: { playbooks: Playbook[] }) {
   const { journals, journalId, setJournalId, reload } = useJournal()
   const [error, setError] = useState<unknown>(null)
@@ -488,6 +570,7 @@ export default function Settings() {
 
         {tab === 'rules' && (
           <>
+            <RiskCapEditor reference={reference} />
             <div className="flex flex-wrap gap-2">
               {reference.playbooks.map((p) => (
                 <button

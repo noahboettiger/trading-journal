@@ -6,8 +6,8 @@ import { api } from '@/lib/api'
 import { useAsync, useReference } from '@/lib/hooks'
 import { money, rMultiple, pct, todayISO, pnlClass } from '@/lib/format'
 import {
-  pointValueFor, GRADES, ASSET_CLASSES, DIRECTIONS, OPTION_SIDES, OPTION_TYPES, STATUSES, CLOSE_METHODS,
-  optionTypeLabel,
+  pointValueFor, GRADES, ASSET_CLASSES, ACCOUNT_TYPES, DIRECTIONS, OPTION_SIDES, OPTION_TYPES, STATUSES,
+  CLOSE_METHODS, optionTypeLabel,
 } from '@/lib/instruments'
 import type { RuleCheck, Trade, TradeImage } from '@/lib/types'
 import { PageHeader } from '@/components/Layout'
@@ -56,7 +56,7 @@ function numeric(form: FormState) {
   for (const k of [
     'contracts', 'entry_price', 'exit_price', 'stop_price', 'target_price', 'point_value',
     'strike', 'entry_premium', 'exit_premium', 'underlying_entry', 'underlying_stop',
-    'underlying_target', 'delta', 'theta', 'vega', 'iv_at_entry', 'collateral', 'risk_amount', 'journal_id',
+    'underlying_target', 'delta', 'theta', 'vega', 'iv_at_entry', 'collateral', 'risk_cap', 'risk_amount', 'journal_id',
     'gross_pnl', 'net_pnl', 'commissions', 'result_r_override',
   ]) {
     out[k] = n(form[k])
@@ -148,6 +148,12 @@ export default function TradeForm() {
   const buyback = buybackCost(calc)
   const leg = currentLeg(calc)
   const rollCount = (form.rolls as Roll[]).length
+  const setAccountType = (accountType: string) =>
+    set({ account_type: accountType, risk_cap: reference.riskCapFor(accountType) })
+
+  const riskCap = n(form.risk_cap) ?? reference.riskCapFor(form.account_type)
+  const overCap = riskCap !== null && riskPreview !== null && riskPreview > riskCap + 0.0001
+
   const exitCount = (form.exits as Exit[]).length
   const openedContracts = contractsOpened(calc)
   const remainingContracts = contractsRemaining(calc)
@@ -222,6 +228,12 @@ export default function TradeForm() {
     if (match) applyPlaybook(String(match.id))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reference.playbooks, form.asset_class, isEdit, journal])
+
+  useEffect(() => {
+    if (isEdit || isOptions || form.account_type || reference.loading) return
+    setAccountType(reference.settings.account_type_default)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, isOptions, form.account_type, reference.loading, reference.settings.account_type_default])
 
   const save = async () => {
     setSaving(true)
@@ -584,19 +596,40 @@ export default function TradeForm() {
                   </div>
                 </div>
               ) : (
-                <div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
-                  <Field label="Contracts">
-                    <Input type="number" step="any" value={form.contracts ?? ''} onChange={(e) => set({ contracts: e.target.value })} />
-                  </Field>
-                  <Field label="Point value" hint="Prefilled for known symbols">
-                    <Input type="number" step="any" value={form.point_value ?? ''} onChange={(e) => set({ point_value: e.target.value })} />
-                  </Field>
-                  <Field label="Entry price" hint="Optional">
-                    <Input type="number" step="any" value={form.entry_price ?? ''} onChange={(e) => set({ entry_price: e.target.value })} />
-                  </Field>
-                  <Field label="Exit price" hint="Optional">
-                    <Input type="number" step="any" value={form.exit_price ?? ''} onChange={(e) => set({ exit_price: e.target.value })} />
-                  </Field>
+                <div className="space-y-4 p-5">
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                    <Field
+                      label="Account type"
+                      hint={riskCap === null ? 'Sets the risk cap you are graded against' : `Graded against ${money(riskCap, { cents: false })}`}
+                    >
+                      <Select
+                        value={form.account_type ?? ''}
+                        options={ACCOUNT_TYPES}
+                        placeholder="Not set"
+                        onChange={(e) => setAccountType(e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Contracts">
+                      <Input type="number" step="any" value={form.contracts ?? ''} onChange={(e) => set({ contracts: e.target.value })} />
+                    </Field>
+                    <Field label="Point value" hint="Prefilled for known symbols">
+                      <Input type="number" step="any" value={form.point_value ?? ''} onChange={(e) => set({ point_value: e.target.value })} />
+                    </Field>
+                    <Field label="Entry price" hint="Optional">
+                      <Input type="number" step="any" value={form.entry_price ?? ''} onChange={(e) => set({ entry_price: e.target.value })} />
+                    </Field>
+                    <Field label="Exit price" hint="Optional">
+                      <Input type="number" step="any" value={form.exit_price ?? ''} onChange={(e) => set({ exit_price: e.target.value })} />
+                    </Field>
+                  </div>
+
+                  {riskCap !== null && (
+                    <p className={`text-xs ${overCap ? 'font-medium text-loss' : 'text-ink-faint'}`}>
+                      {overCap
+                        ? `Risk of ${money(riskPreview)} is over the ${money(riskCap, { cents: false })} cap for a${form.account_type === 'eval' ? 'n eval' : ' funded account'}.`
+                        : `The risk rule on this trade reads ${money(riskCap, { cents: false })}, the cap for a${form.account_type === 'eval' ? 'n eval' : ' funded account'}.`}
+                    </p>
+                  )}
                 </div>
               )}
             </Card>
@@ -719,6 +752,7 @@ export default function TradeForm() {
               />
               <RuleChecklist
                 checks={form.rule_checks}
+                riskCap={riskCap}
                 showViolations={gradingStarted}
                 onChange={(rule_checks) => {
                   setGradingStarted(true)

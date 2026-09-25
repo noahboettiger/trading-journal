@@ -9,7 +9,7 @@ import type { Trade } from '@/lib/types'
 import { PageHeader } from '@/components/Layout'
 import { Card, CardHeader, Select, Input, Spinner, ErrorNote, EmptyState, Badge, Segmented } from '@/components/ui'
 import { ComplianceBadge } from '@/components/RuleChecklist'
-import { GRADES } from '@/lib/instruments'
+import { ACCOUNT_TYPES, GRADES } from '@/lib/instruments'
 import { useJournal } from '@/lib/journals'
 
 const RANGES = [
@@ -24,7 +24,7 @@ const RANGES = [
 const BLANK_FILTERS = {
   range: 'all', asset_class: 'all', trade_style: 'all', option_side: 'all',
   setup: 'all', session: 'all', outcome: 'all', trade_source: 'all',
-  trade_rating: 'all', symbol: '',
+  trade_rating: 'all', account_type: 'all', symbol: '',
 }
 
 /** Turn a range preset into a `from` date the API understands. */
@@ -283,6 +283,8 @@ export default function Trades() {
                 options={[{ value: 'all', label: 'All setup ratings' }, ...GRADES.map((v) => ({ value: v, label: `${v} setups` }))]} />
               <Select value={filters.session} onChange={(e) => set({ session: e.target.value })}
                 options={[{ value: 'all', label: 'All sessions' }, ...reference.values('session').map((v) => ({ value: v, label: v }))]} />
+              <Select value={filters.account_type} onChange={(e) => set({ account_type: e.target.value })}
+                options={[{ value: 'all', label: 'Eval and funded' }, ...ACCOUNT_TYPES]} />
               <Select value={filters.trade_source} onChange={(e) => set({ trade_source: e.target.value })}
                 options={[{ value: 'all', label: 'All sources' }, ...reference.values('source').map((v) => ({ value: v, label: v }))]} />
               <Select value={filters.outcome} onChange={(e) => set({ outcome: e.target.value })}

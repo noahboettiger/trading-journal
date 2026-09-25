@@ -7,7 +7,7 @@ import {
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/hooks'
 import { money, rMultiple, pct, formatDay, pnlClass, ratio, num } from '@/lib/format'
-import { CLOSE_METHOD_LABELS, optionTypeLabel } from '@/lib/instruments'
+import { CLOSE_METHOD_LABELS, accountTypeLabel, optionTypeLabel } from '@/lib/instruments'
 import type { Trade } from '@/lib/types'
 import { PageHeader } from '@/components/Layout'
 import { Card, CardHeader, Badge, Spinner, ErrorNote, EmptyState } from '@/components/ui'
@@ -232,6 +232,9 @@ export default function TradeDetail() {
                 </>
               ) : (
                 <>
+                  {trade.account_type && (
+                    <FieldRow label="Account type" value={accountTypeLabel(trade.account_type)} />
+                  )}
                   <FieldRow label="Contracts" value={num(trade.contracts)} />
                   <FieldRow label="Entry price" value={num(trade.entry_price)} />
                   <FieldRow label="Exit price" value={num(trade.exit_price)} />
@@ -242,7 +245,19 @@ export default function TradeDetail() {
                 </>
               )}
 
-              <FieldRow label="Risk ($)" value={money(trade.risk_amount)} />
+              <FieldRow
+                label="Risk ($)"
+                value={
+                  trade.risk_cap !== null && trade.risk_amount !== null ? (
+                    <span className={trade.risk_amount > trade.risk_cap + 0.0001 ? 'text-loss font-semibold' : undefined}>
+                      {money(trade.risk_amount)}
+                      <span className="ml-1.5 text-[11px] font-normal text-ink-faint">of {money(trade.risk_cap, { cents: false })}</span>
+                    </span>
+                  ) : (
+                    money(trade.risk_amount)
+                  )
+                }
+              />
               <FieldRow label="Result R" value={<span className={pnlClass(trade.result_r)}>{rMultiple(trade.result_r)}</span>} />
               <FieldRow label="Net P&L" value={<span className={pnlClass(trade.net_pnl)}>{money(trade.net_pnl, { sign: true })}</span>} />
               <FieldRow label="Trade rating" value={trade.trade_rating} />
@@ -344,7 +359,7 @@ export default function TradeDetail() {
             subtitle={trade.playbook_name ?? 'No playbook'}
             right={<ComplianceBadge checks={trade.rule_checks} />}
           />
-          <RuleChecklist checks={trade.rule_checks} readOnly columns />
+          <RuleChecklist checks={trade.rule_checks} riskCap={trade.risk_cap} readOnly columns />
         </Card>
 
         {/* Review content */}

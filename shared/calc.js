@@ -604,6 +604,20 @@ export function isPositionClosed(t) {
   return remaining === null ? true : remaining <= 0.0001
 }
 
+/**
+ * Fill a rule's {risk_cap} token with the cap this trade is graded against.
+ *
+ * The token is what gets snapshotted onto the trade, and the dollar figure comes
+ * from the trade's own risk_cap, so raising the cap in Settings never rewrites
+ * the standard an old trade was held to.
+ */
+export function resolveRuleText(text, riskCap) {
+  if (!text || !text.includes('{risk_cap}')) return text ?? ''
+  const cap = num(riskCap)
+  const shown = cap === null ? 'the account cap' : `$${cap.toLocaleString('en-US')}`
+  return text.split('{risk_cap}').join(shown)
+}
+
 /** Cash taken in: every inflow, including the net credit on a roll. */
 export function creditReceived(t) {
   if (t.option_side !== 'sell') return null

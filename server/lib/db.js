@@ -433,6 +433,27 @@ const MIGRATIONS = [
         ON journal_entries (entry_date, COALESCE(session, ''), COALESCE(journal_id, 0));
     `)
   },
+
+  // 13 - eval and funded accounts grade against different risk caps
+  //
+  // An eval is not worth nursing for months, so the cap doubles while one is
+  // being cleared and drops back once the account is funded. The rule the trade
+  // is graded against has to follow that, so the figure in the rule text becomes
+  // a token and the trade stores the cap it was actually held to. Changing the
+  // caps later therefore cannot rewrite how an old trade was graded.
+  `
+  ALTER TABLE trades ADD COLUMN account_type TEXT;
+  ALTER TABLE trades ADD COLUMN risk_cap REAL;
+
+  INSERT OR IGNORE INTO app_meta (key, value) VALUES
+    ('risk_cap_funded',      '250'),
+    ('risk_cap_eval',        '500'),
+    ('account_type_default', 'funded');
+
+  -- Swap the hard figure for the token, keeping whatever wording surrounds it.
+  UPDATE rules SET text   = REPLACE(text,   '$250', '{risk_cap}') WHERE text   LIKE '%$250%';
+  UPDATE rules SET detail = REPLACE(detail, '$250', '{risk_cap}') WHERE detail LIKE '%$250%';
+  `,
 ]
 
 function migrate() {

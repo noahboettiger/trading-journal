@@ -95,6 +95,7 @@ statsRouter.get('/', (req, res) => {
     bySession: groupPerformance(trades, (t) => t.session, 'session'),
     bySymbol: groupPerformance(trades, (t) => t.symbol, 'symbol'),
     byDirection: groupPerformance(trades, (t) => t.direction, 'direction'),
+    byAccountType: groupPerformance(trades, (t) => t.account_type, 'accountType'),
     byTimeframe: groupPerformance(trades, (t) => t.timeframe, 'timeframe'),
     byPlaybook: groupPerformance(trades, (t) => t.playbook_name, 'playbook'),
     byGrade: groupPerformance(trades, (t) => t.execution_grade, 'grade'),

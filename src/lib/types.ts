@@ -65,6 +65,13 @@ export type Lookups = Partial<Record<LookupKind, Lookup[]>>
 
 export interface Tag { id: number; name: string; kind: string }
 
+/** Small app-wide settings, editable from the Settings page. */
+export interface AppSettings {
+  risk_cap_funded: number
+  risk_cap_eval: number
+  account_type_default: string
+}
+
 export interface CashFlow {
   kind: 'open' | 'roll' | 'roll-close' | 'close'
   date: string | null
@@ -160,6 +167,8 @@ export interface Trade {
   vega: number | null
   iv_at_entry: number | null
 
+  account_type: string | null
+  risk_cap: number | null
   risk_amount: number | null
   planned_rr: number | null
   gross_pnl: number | null
@@ -256,6 +265,7 @@ export interface Stats {
   rulePerformance: RulePerf[]
   bySetup: Bucket[]; byStyle: Bucket[]; byAssetClass: Bucket[]; byOptionSide: Bucket[]
   bySource: Bucket[]; bySession: Bucket[]; bySymbol: Bucket[]; byDirection: Bucket[]
+  byAccountType: Bucket[]
   byTimeframe: Bucket[]; byPlaybook: Bucket[]; byGrade: Bucket[]; byRating: Bucket[]; byEmotion: Bucket[]
   byDayOfWeek: Bucket[]; byMistake: Bucket[]
 }
