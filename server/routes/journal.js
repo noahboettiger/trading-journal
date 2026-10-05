@@ -10,12 +10,37 @@ journalRouter.get('/', (req, res) => {
   if (from) { where.push('entry_date >= ?'); params.push(from) }
   if (to) { where.push('entry_date <= ?'); params.push(to) }
   if (journalId) { where.push('journal_id = ?'); params.push(Number(journalId)) }
-  res.json(
-    db.prepare(
+  const entries = db
+    .prepare(
       `SELECT * FROM journal_entries ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY entry_date DESC, id DESC`,
-    ).all(...params),
-  )
+    )
+    .all(...params)
+  res.json(entries.map(withImages))
 })
+
+/** Screenshots belonging to an entry, oldest first. */
+function withImages(entry) {
+  if (!entry) return entry
+  return {
+    ...entry,
+    images: db
+      .prepare('SELECT id, path, caption, sort_order FROM journal_images WHERE entry_id = ? ORDER BY sort_order, id')
+      .all(entry.id),
+  }
+}
+
+/** Replace an entry's screenshots with exactly what was sent. */
+function replaceImages(entryId, images) {
+  if (!Array.isArray(images)) return
+  db.prepare('DELETE FROM journal_images WHERE entry_id = ?').run(entryId)
+  const ins = db.prepare(
+    'INSERT INTO journal_images (entry_id, path, caption, sort_order) VALUES (?, ?, ?, ?)',
+  )
+  images.forEach((img, i) => {
+    if (!img?.path) return
+    ins.run(entryId, img.path, img.caption || null, img.sort_order ?? i)
+  })
+}
 
 journalRouter.put('/', (req, res, next) => {
   try {
@@ -32,19 +57,29 @@ journalRouter.put('/', (req, res, next) => {
       .prepare('SELECT id FROM journal_entries WHERE entry_date = ? AND session IS ? AND journal_id IS ?')
       .get(entry_date, slotSession, slotJournal)
 
+    // The entry and its screenshots save together, so a failure part way
+    // through cannot leave the day holding half its charts.
+    db.exec('BEGIN')
     let id
-    if (existing) {
-      db.prepare("UPDATE journal_entries SET content = ?, mood = ?, updated_at = datetime('now') WHERE id = ?")
-        .run(content, mood, existing.id)
-      id = existing.id
-    } else {
-      const info = db
-        .prepare('INSERT INTO journal_entries (entry_date, session, content, mood, journal_id) VALUES (?, ?, ?, ?, ?)')
-        .run(entry_date, slotSession, content, mood, slotJournal)
-      id = Number(info.lastInsertRowid)
+    try {
+      if (existing) {
+        db.prepare("UPDATE journal_entries SET content = ?, mood = ?, updated_at = datetime('now') WHERE id = ?")
+          .run(content, mood, existing.id)
+        id = existing.id
+      } else {
+        const info = db
+          .prepare('INSERT INTO journal_entries (entry_date, session, content, mood, journal_id) VALUES (?, ?, ?, ?, ?)')
+          .run(entry_date, slotSession, content, mood, slotJournal)
+        id = Number(info.lastInsertRowid)
+      }
+      replaceImages(id, req.body.images)
+      db.exec('COMMIT')
+    } catch (err) {
+      db.exec('ROLLBACK')
+      throw err
     }
 
-    res.json(db.prepare('SELECT * FROM journal_entries WHERE id = ?').get(id))
+    res.json(withImages(db.prepare('SELECT * FROM journal_entries WHERE id = ?').get(id)))
   } catch (err) {
     next(err)
   }

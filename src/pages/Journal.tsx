@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Save, NotebookPen, Trash2 } from 'lucide-react'
+import { Save, NotebookPen, Trash2, Image as ImageIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAsync, useReference } from '@/lib/hooks'
 import { formatDay, todayISO } from '@/lib/format'
 import { PageHeader } from '@/components/Layout'
 import { Card, CardHeader, Field, Input, Select, Textarea, Spinner, ErrorNote, EmptyState } from '@/components/ui'
+import { ChartUpload } from '@/components/ChartUpload'
+import type { TradeImage } from '@/lib/types'
 import { useJournal } from '@/lib/journals'
 
 // The bias is written before the open and the rest after the close, so the
@@ -33,7 +35,14 @@ const TEMPLATE = `1. Daily bias (before the open). What am I specifically lookin
 8. What one thing closes that gap tomorrow?
 `
 
-interface Entry { id: number; entry_date: string; session: string | null; content: string; mood: string | null }
+interface Entry {
+  id: number
+  entry_date: string
+  session: string | null
+  content: string
+  mood: string | null
+  images?: TradeImage[]
+}
 
 export default function Journal() {
   const reference = useReference()
@@ -42,7 +51,13 @@ export default function Journal() {
     () => (journalId === null ? Promise.resolve([]) : api.journalList({ journal_id: journalId })),
     [journalId],
   )
-  const [draft, setDraft] = useState({ entry_date: todayISO(), session: '', content: '', mood: '' })
+  const [draft, setDraft] = useState<{
+    entry_date: string
+    session: string
+    content: string
+    mood: string
+    images: TradeImage[]
+  }>({ entry_date: todayISO(), session: '', content: '', mood: '', images: [] })
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<unknown>(null)
 
@@ -57,7 +72,12 @@ export default function Journal() {
     const match = (entries ?? []).find(
       (e) => e.entry_date === draft.entry_date && (e.session ?? '') === draft.session,
     )
-    setDraft((d) => ({ ...d, content: match?.content ?? '', mood: match?.mood ?? '' }))
+    setDraft((d) => ({
+      ...d,
+      content: match?.content ?? '',
+      mood: match?.mood ?? '',
+      images: (match?.images ?? []).map((i) => ({ ...i })),
+    }))
   }, [draft.entry_date, draft.session, entries])
 
   const save = async () => {
@@ -69,6 +89,7 @@ export default function Journal() {
         session: draft.session || null,
         mood: draft.mood || null,
         journal_id: journalId,
+        images: draft.images,
       })
       await reload()
     } catch (e) {
@@ -83,7 +104,7 @@ export default function Journal() {
     setSaveError(null)
     try {
       await api.journalDelete(entry.id)
-      if (entry.id === current?.id) setDraft((d) => ({ ...d, content: '', mood: '' }))
+      if (entry.id === current?.id) setDraft((d) => ({ ...d, content: '', mood: '', images: [] }))
       await reload()
     } catch (e) {
       setSaveError(e)
@@ -108,7 +129,11 @@ export default function Journal() {
                     <Trash2 size={14} /> Delete
                   </button>
                 )}
-                <button className="btn-primary" onClick={save} disabled={saving || !draft.content.trim()}>
+                <button
+                  className="btn-primary"
+                  onClick={save}
+                  disabled={saving || (!draft.content.trim() && !draft.images.length)}
+                >
                   <Save size={14} /> {saving ? 'Saving...' : current ? 'Update entry' : 'Save entry'}
                 </button>
               </div>
@@ -139,6 +164,16 @@ export default function Journal() {
             >
               <Textarea rows={24} value={draft.content} onChange={(e) => setDraft({ ...draft, content: e.target.value })} placeholder="How did the session go?" />
             </Field>
+
+            <Field
+              label="Charts"
+              hint="The setup of the day next to what you actually took. Caption each one."
+            >
+              <ChartUpload
+                images={draft.images}
+                onChange={(images) => setDraft((d) => ({ ...d, images }))}
+              />
+            </Field>
           </div>
         </Card>
 
@@ -156,13 +191,33 @@ export default function Journal() {
                 <li key={e.id} className={`flex items-start transition hover:bg-surface-2 ${e.id === current?.id ? 'bg-surface-2' : ''}`}>
                   <button
                     className="min-w-0 flex-1 px-4 py-3 text-left"
-                    onClick={() => setDraft({ entry_date: e.entry_date, session: e.session ?? '', content: e.content, mood: e.mood ?? '' })}
+                    onClick={() =>
+                      setDraft({
+                        entry_date: e.entry_date,
+                        session: e.session ?? '',
+                        content: e.content,
+                        mood: e.mood ?? '',
+                        images: (e.images ?? []).map((i) => ({ ...i })),
+                      })
+                    }
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-medium">{formatDay(e.entry_date)}</span>
-                      {e.session && <span className="text-[11px] text-ink-faint">{e.session}</span>}
+                      <span className="flex shrink-0 items-center gap-2 text-[11px] text-ink-faint">
+                        {e.session}
+                        {!!e.images?.length && (
+                          <span className="inline-flex items-center gap-1" title={`${e.images.length} chart${e.images.length === 1 ? '' : 's'}`}>
+                            <ImageIcon size={11} />
+                            {e.images.length}
+                          </span>
+                        )}
+                      </span>
                     </div>
-                    <p className="mt-0.5 line-clamp-2 text-xs text-ink-faint">{e.content.replace(/\s+/g, ' ').slice(0, 120)}</p>
+                    <p className="mt-0.5 line-clamp-2 text-xs text-ink-faint">
+                      {e.content.trim()
+                        ? e.content.replace(/\s+/g, ' ').slice(0, 120)
+                        : 'Charts only, no notes written'}
+                    </p>
                   </button>
                   <button
                     className="mr-2 mt-3 shrink-0 rounded p-1.5 text-ink-faint transition hover:bg-loss/15 hover:text-loss"

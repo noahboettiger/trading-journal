@@ -454,6 +454,23 @@ const MIGRATIONS = [
   UPDATE rules SET text   = REPLACE(text,   '$250', '{risk_cap}') WHERE text   LIKE '%$250%';
   UPDATE rules SET detail = REPLACE(detail, '$250', '{risk_cap}') WHERE detail LIKE '%$250%';
   `,
+
+  // 14 - screenshots on a daily entry, not just on a trade
+  //
+  // The review that matters most has no trade attached to it: what the best
+  // setup of the day was, next to what was actually taken, or on a day with no
+  // trade at all, whether there was really nothing there. That comparison needs
+  // charts on the day rather than on a trade.
+  `
+  CREATE TABLE journal_images (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    entry_id   INTEGER NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
+    path       TEXT    NOT NULL,
+    caption    TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX idx_journal_images_entry ON journal_images(entry_id, sort_order);
+  `,
 ]
 
 function migrate() {

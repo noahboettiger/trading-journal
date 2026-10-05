@@ -2,15 +2,29 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { db, DATA_DIR } from './db.js'
 
+// Every table a restore should reproduce exactly. Anything added in a migration
+// has to be listed here too, or a restore from a JSON export silently drops it.
 const TABLES = [
   'lookups', 'journals', 'playbooks', 'rules', 'trades',
-  'trade_rule_checks', 'trade_tags', 'trade_images', 'tags', 'journal_entries',
+  'trade_rule_checks', 'trade_tags', 'trade_images', 'trade_rolls', 'trade_exits',
+  'tags', 'journal_entries', 'journal_images',
 ]
+
+/**
+ * Carried across but merged rather than wiped and replaced.
+ *
+ * app_meta holds the risk caps, which belong in a backup, alongside the
+ * seeded_at marker that stops first-run seeding from running twice. Clearing
+ * the table would drop that marker, and an older export that has no app_meta
+ * rows to put back would leave the next start re-seeding on top of restored
+ * data. Merging keeps the marker either way.
+ */
+const MERGE_TABLES = ['app_meta']
 
 /** Full JSON snapshot of the database. Chart image files are not included. */
 export function exportAll() {
   const data = {}
-  for (const t of TABLES) data[t] = db.prepare(`SELECT * FROM ${t}`).all()
+  for (const t of [...TABLES, ...MERGE_TABLES]) data[t] = db.prepare(`SELECT * FROM ${t}`).all()
   return {
     format: 'trading-journal-backup',
     version: db.prepare('PRAGMA user_version').get().user_version,
@@ -42,6 +56,18 @@ export function importAll(payload) {
       )
       for (const row of rows) stmt.run(...cols.map((c) => row[c] ?? null))
     }
+
+    for (const t of MERGE_TABLES) {
+      const rows = data[t] ?? []
+      counts[t] = rows.length
+      if (!rows.length) continue
+      const cols = Object.keys(rows[0])
+      const stmt = db.prepare(
+        `INSERT OR REPLACE INTO ${t} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
+      )
+      for (const row of rows) stmt.run(...cols.map((c) => row[c] ?? null))
+    }
+
     db.exec('COMMIT')
     return { restored: counts }
   } catch (err) {

@@ -512,6 +512,18 @@ the button says **Update entry** once an entry exists so you can see which way i
 will go. Any entry can be deleted, from the editor or from the list of past
 entries.
 
+#### Charts on the day, not just on a trade
+
+A day takes screenshots the same way a trade does: paste, drop or pick, with a
+caption on each one. The review that matters most often has no trade attached to
+it, so this is where the best setup of the day goes next to what you actually
+took. On a day you passed, it is the record of whether there was really nothing
+there.
+
+A day can be saved for its charts alone, with nothing written, and the list of
+past entries shows how many charts each day carries so a chart-only day is still
+findable. Deleting a day deletes its charts with it.
+
 ### Room to actually write
 
 Every trade carries four separate long-form fields rather than one notes box:
@@ -644,8 +656,11 @@ writes live in `journal.db-wal` until SQLite folds them in. Copying `journal.db`
 on its own can hand you a database that opens with **no tables at all**. Use the
 snapshots, or copy the entire `data/` folder, never `journal.db` by itself.
 
-Settings → Data also has a JSON export covering trades, rules and lists. That one
-is human-readable and portable, but it does not include your chart images.
+Settings → Data also has a JSON export covering every table: trades with their
+rolls, partial exits and rule snapshots, your lists, your rules, your daily
+entries and the risk caps. It is human-readable and portable, but it holds only
+the paths to your chart images, not the image files, so keep `data/uploads/` with
+it if you are moving machines.
 
 ### Settings, without fighting your shell
 
