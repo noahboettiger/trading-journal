@@ -471,6 +471,22 @@ const MIGRATIONS = [
   );
   CREATE INDEX idx_journal_images_entry ON journal_images(entry_id, sort_order);
   `,
+
+  // 15 - risk caps sized against the account drawdown
+  //
+  // $200 funded and $400 on an eval, which is 10% and 20% of the $2,000 max
+  // drawdown on a 50K prop account, rather than the round numbers the caps
+  // started on. A one-off correction of the owner's own figures: Settings is
+  // where these change from here, and no later migration should touch them.
+  //
+  // Trades already logged keep the cap stored against them, so this changes
+  // what new trades are graded against and nothing else.
+  `
+  INSERT INTO app_meta (key, value) VALUES ('risk_cap_funded', '200')
+    ON CONFLICT (key) DO UPDATE SET value = excluded.value;
+  INSERT INTO app_meta (key, value) VALUES ('risk_cap_eval', '400')
+    ON CONFLICT (key) DO UPDATE SET value = excluded.value;
+  `,
 ]
 
 function migrate() {

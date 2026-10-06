@@ -8,8 +8,9 @@ import { num } from '../../shared/calc.js'
  * internal markers that share the table.
  */
 export const SETTING_DEFAULTS = {
-  risk_cap_funded: 250,
-  risk_cap_eval: 500,
+  // 10% and 20% of the $2,000 max drawdown on a 50K prop account.
+  risk_cap_funded: 200,
+  risk_cap_eval: 400,
   account_type_default: 'funded',
 }
 

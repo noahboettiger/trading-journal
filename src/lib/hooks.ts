@@ -4,8 +4,8 @@ import type { AppSettings, Lookups, Playbook, Tag } from './types'
 
 /** Used until the real settings land, so the first render has real numbers. */
 const DEFAULT_SETTINGS: AppSettings = {
-  risk_cap_funded: 250,
-  risk_cap_eval: 500,
+  risk_cap_funded: 200,
+  risk_cap_eval: 400,
   account_type_default: 'funded',
 }
 

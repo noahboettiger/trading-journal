@@ -448,22 +448,22 @@ An eval is there to be cleared, not nursed for months, so the dollar cap is
 bigger while one is running and drops back once the account is funded. Set
 **Account type** on a futures trade and the risk rule follows it:
 
-| Account type | Cap the rule grades against |
-| --- | --- |
-| Eval | $500 |
-| Funded | $250 |
+| Account type | Cap the rule grades against | Share of a 50K account's $2,000 drawdown |
+| --- | --- | --- |
+| Eval | $400 | 20% |
+| Funded | $200 | 10% |
 
 Both figures live in Settings under **Risk caps**, along with which phase a new
-trade starts on, so moving to $400 and $200 later is two fields and no code.
+trade starts on, so moving them again is two fields and no code.
 
 The rule text stores a `{risk_cap}` token rather than a figure, and each trade
 stores the cap it was actually held to. So raising a cap changes what new trades
 are graded against and leaves every trade already logged reading exactly what it
 was held to at the time. Trades logged before this existed keep the literal $250
-they were graded against.
+they were graded against, as do trades logged while the caps were $250 and $500.
 
 The form also says when the risk on the trade is over the cap for the phase you
-picked, and the review card shows risk as **$480 of $500**, so the comparison is
+picked, and the review card shows risk as **$380 of $400**, so the comparison is
 there without you doing the arithmetic.
 
 Analytics breaks performance down by account type, which is the number that
