@@ -377,6 +377,15 @@ premium selling. Enter the credit and the strike, and the journal derives:
 That last one is the number to check against a 50-60% buy-back target. Expiring
 worthless reads as 100%; a position that moved against you reads negative.
 
+**R is not shown in this book at all.** An R multiple compares the result to what
+was risked, and a cash-secured put risks the whole collateral to earn a premium,
+so even a good one reads as a rounding error: the SOXL position that returned
+$305 on $9,000 scores 0.03R. Everywhere the other journals show R, this one shows
+**return on collateral** instead: the trade list, the review card, the calendar
+and every analytics breakdown. Risk is labelled Collateral here for the same
+reason. Aggregates are capital weighted, net P&L over collateral deployed, so a
+$20,000 put does not count the same as a $2,000 one.
+
 The Analytics page has a **Premium selling** section rolling these up across every
 short put: total credit, average return on collateral, capital-weighted annualised
 return, average days held, average share of max profit captured, and a breakdown of

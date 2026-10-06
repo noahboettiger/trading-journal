@@ -8,7 +8,7 @@ import type { Bucket, Stats } from '@/lib/types'
 import { PageHeader } from '@/components/Layout'
 import { Card, CardHeader, Spinner, ErrorNote, Segmented, EmptyState } from '@/components/ui'
 import { rangeStart } from './Trades'
-import { useJournal } from '@/lib/journals'
+import { useJournal, isPremiumSelling } from '@/lib/journals'
 
 const RANGES = [
   { value: 'all', label: 'All' },
@@ -27,6 +27,9 @@ function BreakdownTable({ title, subtitle, rows, keyField }: {
 }) {
   const max = useMemo(() => Math.max(1, ...rows.map((r) => Math.abs(r.netPnl))), [rows])
   const real = rows.filter((r) => r.trades > 0)
+  // Read from context rather than threaded through, since every breakdown on
+  // the page wants the same answer.
+  const premiumSelling = isPremiumSelling(useJournal().journal)
 
   return (
     <Card>
@@ -36,7 +39,7 @@ function BreakdownTable({ title, subtitle, rows, keyField }: {
           <table className="w-full min-w-[540px] text-sm">
             <thead>
               <tr className="border-b border-line text-left">
-                {['', 'Trades', 'Win rate', 'Avg R', 'Net P&L'].map((h, i) => (
+                {['', 'Trades', 'Win rate', premiumSelling ? 'Return' : 'Avg R', 'Net P&L'].map((h, i) => (
                   <th key={i} className="label px-4 py-2.5">{h}</th>
                 ))}
               </tr>
@@ -58,7 +61,13 @@ function BreakdownTable({ title, subtitle, rows, keyField }: {
                     <span className="ml-1 text-[11px] text-ink-faint">({r.wins}W/{r.losses}L)</span>
                   </td>
                   <td className="px-4 py-2.5 tnum text-ink-muted">{pct(r.winRate, 0)}</td>
-                  <td className={`px-4 py-2.5 tnum font-medium ${pnlClass(r.avgR)}`}>{r.avgR === null ? '--' : rMultiple(r.avgR)}</td>
+                  {premiumSelling ? (
+                    <td className={`px-4 py-2.5 tnum font-medium ${pnlClass(r.returnOnCollateral)}`}>
+                      {pct(r.returnOnCollateral, 2)}
+                    </td>
+                  ) : (
+                    <td className={`px-4 py-2.5 tnum font-medium ${pnlClass(r.avgR)}`}>{r.avgR === null ? '--' : rMultiple(r.avgR)}</td>
+                  )}
                   <td className={`px-4 py-2.5 tnum font-semibold ${pnlClass(r.netPnl)}`}>{money(r.netPnl, { sign: true })}</td>
                 </tr>
               ))}

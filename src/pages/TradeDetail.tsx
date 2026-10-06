@@ -246,7 +246,7 @@ export default function TradeDetail() {
               )}
 
               <FieldRow
-                label="Risk ($)"
+                label={isSelling ? 'Collateral' : 'Risk ($)'}
                 value={
                   trade.risk_cap !== null && trade.risk_amount !== null ? (
                     <span className={trade.risk_amount > trade.risk_cap + 0.0001 ? 'text-loss font-semibold' : undefined}>
@@ -258,7 +258,14 @@ export default function TradeDetail() {
                   )
                 }
               />
-              <FieldRow label="Result R" value={<span className={pnlClass(trade.result_r)}>{rMultiple(trade.result_r)}</span>} />
+              {isSelling ? (
+                <FieldRow
+                  label="Return on collateral"
+                  value={<span className={pnlClass(trade.return_on_collateral)}>{pct(trade.return_on_collateral, 2)}</span>}
+                />
+              ) : (
+                <FieldRow label="Result R" value={<span className={pnlClass(trade.result_r)}>{rMultiple(trade.result_r)}</span>} />
+              )}
               <FieldRow label="Net P&L" value={<span className={pnlClass(trade.net_pnl)}>{money(trade.net_pnl, { sign: true })}</span>} />
               <FieldRow label="Trade rating" value={trade.trade_rating} />
               <FieldRow label="Execution grade" value={trade.execution_grade} />

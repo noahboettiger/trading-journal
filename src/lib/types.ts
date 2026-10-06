@@ -223,10 +223,13 @@ export interface Summary {
   bestTrade: number | null; worstTrade: number | null
   currentStreak: number; longestWinStreak: number; longestLossStreak: number
   maxDrawdown: number
+  /** Capital tied up, and what it earned. Null outside a premium-selling book. */
+  collateralDeployed: number | null; returnOnCollateral: number | null
 }
 
 export interface PeriodRollup {
   pnl: number; trades: number; wins: number; losses: number; r: number; winRate: number | null
+  collateral: number; returnOnCollateral: number | null
 }
 export type WeekRollup = PeriodRollup & { week: string; weekStart: string }
 export type MonthRollup = PeriodRollup & { month: string }
@@ -234,6 +237,7 @@ export type MonthRollup = PeriodRollup & { month: string }
 export interface DayRollup {
   date: string; pnl: number; trades: number; wins: number; losses: number
   r: number; winRate: number | null
+  collateral: number; returnOnCollateral: number | null
 }
 
 export interface RulePerf {

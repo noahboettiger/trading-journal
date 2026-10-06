@@ -137,6 +137,25 @@ const mean = (xs) => (xs.length ? sum(xs) / xs.length : null)
  */
 export const isRealised = (t) => t.status === 'closed' && num(t.net_pnl) !== null
 
+/**
+ * What a set of trades earned on the capital they tied up, as a percent.
+ *
+ * Capital weighted rather than an average of each trade's own return, so a
+ * $20,000 put does not count the same as a $2,000 one. Null when nothing in the
+ * set required collateral, which is every set outside a premium-selling book.
+ */
+export function collateralReturn(trades) {
+  let deployed = 0
+  let net = 0
+  for (const t of trades) {
+    const c = collateralRequired(t)
+    if (c === null || c <= 0) continue
+    deployed += c
+    net += num(t.net_pnl) ?? 0
+  }
+  return deployed > 0 ? round2((net / deployed) * 100) : null
+}
+
 export function summarise(trades) {
   const closed = trades.filter(isRealised)
   const pnls = closed.map((t) => num(t.net_pnl))
@@ -191,6 +210,8 @@ export function summarise(trades) {
     currentStreak: streak,
     longestWinStreak: bestWin,
     longestLossStreak: worstLoss,
+    collateralDeployed: sum(closed.map((t) => collateralRequired(t))) || null,
+    returnOnCollateral: collateralReturn(closed),
   }
 }
 
@@ -201,16 +222,21 @@ export function dailyRollup(trades) {
     if (!isRealised(t)) continue
     const net = num(t.net_pnl)
     const key = String(t.trade_date).slice(0, 10)
-    if (!byDay.has(key)) byDay.set(key, { date: key, pnl: 0, trades: 0, wins: 0, losses: 0, r: 0 })
+    if (!byDay.has(key)) byDay.set(key, { date: key, pnl: 0, trades: 0, wins: 0, losses: 0, r: 0, collateral: 0 })
     const d = byDay.get(key)
     d.pnl += net
     d.trades += 1
     if (t.outcome === 'win') d.wins += 1
     if (t.outcome === 'loss') d.losses += 1
     d.r += num(t.result_r) ?? 0
+    d.collateral += collateralRequired(t) ?? 0
   }
   return [...byDay.values()]
-    .map((d) => ({ ...d, winRate: d.wins + d.losses ? (d.wins / (d.wins + d.losses)) * 100 : null }))
+    .map((d) => ({
+      ...d,
+      winRate: d.wins + d.losses ? (d.wins / (d.wins + d.losses)) * 100 : null,
+      returnOnCollateral: d.collateral > 0 ? round2((d.pnl / d.collateral) * 100) : null,
+    }))
     .sort((a, b) => a.date.localeCompare(b.date))
 }
 
@@ -321,7 +347,7 @@ export function weeklyRollup(trades) {
     const wk = weekKey(t.trade_date)
     if (!wk) continue
     if (!byWeek.has(wk.key)) {
-      byWeek.set(wk.key, { week: wk.key, weekStart: wk.weekStart, pnl: 0, trades: 0, wins: 0, losses: 0, r: 0 })
+      byWeek.set(wk.key, { week: wk.key, weekStart: wk.weekStart, pnl: 0, trades: 0, wins: 0, losses: 0, r: 0, collateral: 0 })
     }
     const w = byWeek.get(wk.key)
     w.pnl += net
@@ -329,9 +355,14 @@ export function weeklyRollup(trades) {
     if (t.outcome === 'win') w.wins += 1
     if (t.outcome === 'loss') w.losses += 1
     w.r += num(t.result_r) ?? 0
+    w.collateral += collateralRequired(t) ?? 0
   }
   return [...byWeek.values()]
-    .map((w) => ({ ...w, winRate: w.wins + w.losses ? (w.wins / (w.wins + w.losses)) * 100 : null }))
+    .map((w) => ({
+      ...w,
+      winRate: w.wins + w.losses ? (w.wins / (w.wins + w.losses)) * 100 : null,
+      returnOnCollateral: w.collateral > 0 ? round2((w.pnl / w.collateral) * 100) : null,
+    }))
     .sort((a, b) => a.weekStart.localeCompare(b.weekStart))
 }
 
@@ -342,16 +373,21 @@ export function monthlyRollup(trades) {
     if (!isRealised(t)) continue
     const net = num(t.net_pnl)
     const key = String(t.trade_date).slice(0, 7)
-    if (!byMonth.has(key)) byMonth.set(key, { month: key, pnl: 0, trades: 0, wins: 0, losses: 0, r: 0 })
+    if (!byMonth.has(key)) byMonth.set(key, { month: key, pnl: 0, trades: 0, wins: 0, losses: 0, r: 0, collateral: 0 })
     const m = byMonth.get(key)
     m.pnl += net
     m.trades += 1
     if (t.outcome === 'win') m.wins += 1
     if (t.outcome === 'loss') m.losses += 1
     m.r += num(t.result_r) ?? 0
+    m.collateral += collateralRequired(t) ?? 0
   }
   return [...byMonth.values()]
-    .map((m) => ({ ...m, winRate: m.wins + m.losses ? (m.wins / (m.wins + m.losses)) * 100 : null }))
+    .map((m) => ({
+      ...m,
+      winRate: m.wins + m.losses ? (m.wins / (m.wins + m.losses)) * 100 : null,
+      returnOnCollateral: m.collateral > 0 ? round2((m.pnl / m.collateral) * 100) : null,
+    }))
     .sort((a, b) => a.month.localeCompare(b.month))
 }
 

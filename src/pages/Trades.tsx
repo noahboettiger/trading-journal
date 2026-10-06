@@ -4,13 +4,13 @@ import { Search, SlidersHorizontal, Plus, X, Pencil, CircleDot } from 'lucide-re
 
 import { api } from '@/lib/api'
 import { useAsync, useDebounced, useReference, useStored } from '@/lib/hooks'
-import { money, rMultiple, formatDay, pnlClass, compactMoney } from '@/lib/format'
+import { money, rMultiple, pct, formatDay, pnlClass, compactMoney } from '@/lib/format'
 import type { Trade } from '@/lib/types'
 import { PageHeader } from '@/components/Layout'
 import { Card, CardHeader, Select, Input, Spinner, ErrorNote, EmptyState, Badge, Segmented } from '@/components/ui'
 import { ComplianceBadge } from '@/components/RuleChecklist'
 import { ACCOUNT_TYPES, GRADES } from '@/lib/instruments'
-import { useJournal } from '@/lib/journals'
+import { useJournal, isPremiumSelling } from '@/lib/journals'
 
 const RANGES = [
   { value: 'all', label: 'All time' },
@@ -86,11 +86,13 @@ const TD = ({ children, className = '' }: { children?: React.ReactNode; classNam
  * cash-secured put is about capital tied up and time left; a finished trade is
  * about what it returned. Same rows, different columns.
  */
-function TradeTable({ title, subtitle, trades, variant }: {
+function TradeTable({ title, subtitle, trades, variant, premiumSelling }: {
   title?: string
   subtitle?: string
   trades: Trade[]
   variant: 'open' | 'closed'
+  /** Judge the book on what the collateral earned rather than on R. */
+  premiumSelling?: boolean
 }) {
   if (!trades.length) return null
   const isOpen = variant === 'open'
@@ -126,8 +128,8 @@ function TradeTable({ title, subtitle, trades, variant }: {
                 <>
                   <TH>Session</TH>
                   <TH>Rules</TH>
-                  <TH>Risk</TH>
-                  <TH>R</TH>
+                  <TH>{premiumSelling ? 'Collateral' : 'Risk'}</TH>
+                  <TH>{premiumSelling ? 'Return' : 'R'}</TH>
                   <TH>P&L</TH>
                   <TH>Setup</TH>
                   <TH>Exec</TH>
@@ -167,8 +169,16 @@ function TradeTable({ title, subtitle, trades, variant }: {
                   <>
                     <TD className="text-ink-muted">{t.session ?? '--'}</TD>
                     <TD><ComplianceBadge checks={t.rule_checks} compact /></TD>
-                    <TD className="text-ink-muted tnum">{money(t.risk_amount)}</TD>
-                    <TD className={`font-semibold tnum ${pnlClass(t.result_r)}`}>{rMultiple(t.result_r)}</TD>
+                    <TD className="text-ink-muted tnum">
+                      {premiumSelling ? compactMoney(t.collateral_required ?? t.risk_amount) : money(t.risk_amount)}
+                    </TD>
+                    {premiumSelling ? (
+                      <TD className={`font-semibold tnum ${pnlClass(t.return_on_collateral)}`}>
+                        {pct(t.return_on_collateral, 2)}
+                      </TD>
+                    ) : (
+                      <TD className={`font-semibold tnum ${pnlClass(t.result_r)}`}>{rMultiple(t.result_r)}</TD>
+                    )}
                     <TD className={`font-semibold tnum ${pnlClass(t.net_pnl)}`}>{money(t.net_pnl, { sign: true })}</TD>
                     <TD>{t.trade_rating ? <Badge>{t.trade_rating}</Badge> : <span className="text-ink-faint">--</span>}</TD>
                     <TD>{t.execution_grade ? <Badge>{t.execution_grade}</Badge> : <span className="text-ink-faint">--</span>}</TD>
@@ -187,6 +197,7 @@ function TradeTable({ title, subtitle, trades, variant }: {
 export default function Trades() {
   const reference = useReference()
   const { journalId, journal } = useJournal()
+  const premiumSelling = isPremiumSelling(journal)
   const [showFilters, setShowFilters] = useStored('tj-show-filters', false)
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useStored<Record<string, string>>('tj-trade-filters', BLANK_FILTERS)
@@ -329,7 +340,12 @@ export default function Trades() {
               trades={open}
               variant="open"
             />
-            <TradeTable title={open.length ? 'Closed Trades' : undefined} trades={closed} variant="closed" />
+            <TradeTable
+              title={open.length ? 'Closed Trades' : undefined}
+              trades={closed}
+              variant="closed"
+              premiumSelling={premiumSelling}
+            />
           </>
         )}
       </div>

@@ -6,7 +6,7 @@ import type { Stats } from '@/lib/types'
 import { PageHeader } from '@/components/Layout'
 import { Card, CardHeader, Spinner, ErrorNote, Segmented } from '@/components/ui'
 import { PnlCalendar } from '@/components/PnlCalendar'
-import { useJournal } from '@/lib/journals'
+import { useJournal, isPremiumSelling } from '@/lib/journals'
 
 type Grain = 'day' | 'week' | 'month'
 
@@ -14,6 +14,7 @@ export default function CalendarPage() {
   const [month, setMonth] = useState(() => new Date())
   const [grain, setGrain] = useState<Grain>('day')
   const { journalId, journal } = useJournal()
+  const premiumSelling = isPremiumSelling(journal)
   const { data: stats, loading, error } = useAsync<Stats>(
     () =>
       journalId === null
@@ -78,7 +79,7 @@ export default function CalendarPage() {
             <table className="w-full min-w-[620px] text-sm">
               <thead>
                 <tr className="border-b border-line text-left">
-                  {['Period', 'Trades', 'W / L', 'Win rate', 'Total R', 'Net P&L'].map((h) => (
+                  {['Period', 'Trades', 'W / L', 'Win rate', premiumSelling ? 'Return' : 'Total R', 'Net P&L'].map((h) => (
                     <th key={h} className="label px-4 py-2.5">{h}</th>
                   ))}
                 </tr>
@@ -90,7 +91,13 @@ export default function CalendarPage() {
                     <td className="px-4 py-2.5 tnum text-ink-muted">{r.trades}</td>
                     <td className="px-4 py-2.5 tnum text-ink-muted">{r.wins} / {r.losses}</td>
                     <td className="px-4 py-2.5 tnum text-ink-muted">{pct(r.winRate, 0)}</td>
-                    <td className={`px-4 py-2.5 tnum font-medium ${pnlClass(r.r)}`}>{rMultiple(r.r)}</td>
+                    {premiumSelling ? (
+                      <td className={`px-4 py-2.5 tnum font-medium ${pnlClass(r.returnOnCollateral)}`}>
+                        {pct(r.returnOnCollateral, 2)}
+                      </td>
+                    ) : (
+                      <td className={`px-4 py-2.5 tnum font-medium ${pnlClass(r.r)}`}>{rMultiple(r.r)}</td>
+                    )}
                     <td className={`px-4 py-2.5 tnum font-semibold ${pnlClass(r.pnl)}`}>{money(r.pnl, { sign: true })}</td>
                   </tr>
                 ))}
