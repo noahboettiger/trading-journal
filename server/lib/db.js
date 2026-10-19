@@ -487,6 +487,41 @@ const MIGRATIONS = [
   INSERT INTO app_meta (key, value) VALUES ('risk_cap_eval', '400')
     ON CONFLICT (key) DO UPDATE SET value = excluded.value;
   `,
+
+  // 16 - Paper Trading as a source
+  //
+  // Placed by where Eval sits rather than at a fixed position, because the
+  // source list is editable and has usually been reordered by the time this
+  // runs. Everything below Eval shifts down to make room; if Eval has been
+  // removed, it goes on the end rather than guessing.
+  (db) => {
+    // Migrations run before first-run seeding, so on a brand new database there
+    // is no list to patch yet and the seed already has it in the right place.
+    const hasList = db.prepare("SELECT 1 FROM lookups WHERE kind = 'source' LIMIT 1").get()
+    if (!hasList) return
+
+    const already = db
+      .prepare("SELECT 1 FROM lookups WHERE kind = 'source' AND value = 'Paper Trading'")
+      .get()
+    if (already) return
+
+    const anchorRow = db
+      .prepare("SELECT sort_order FROM lookups WHERE kind = 'source' AND value = 'Eval'")
+      .get()
+
+    if (anchorRow) {
+      db.prepare("UPDATE lookups SET sort_order = sort_order + 1 WHERE kind = 'source' AND sort_order > ?")
+        .run(anchorRow.sort_order)
+      db.prepare("INSERT INTO lookups (kind, value, sort_order) VALUES ('source', 'Paper Trading', ?)")
+        .run(anchorRow.sort_order + 1)
+    } else {
+      const last = db
+        .prepare("SELECT COALESCE(MAX(sort_order), -1) AS m FROM lookups WHERE kind = 'source'")
+        .get().m
+      db.prepare("INSERT INTO lookups (kind, value, sort_order) VALUES ('source', 'Paper Trading', ?)")
+        .run(last + 1)
+    }
+  },
 ]
 
 function migrate() {

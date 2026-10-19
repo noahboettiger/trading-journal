@@ -295,7 +295,7 @@ export default function Trades() {
               <Select value={filters.session} onChange={(e) => set({ session: e.target.value })}
                 options={[{ value: 'all', label: 'All sessions' }, ...reference.values('session').map((v) => ({ value: v, label: v }))]} />
               <Select value={filters.account_type} onChange={(e) => set({ account_type: e.target.value })}
-                options={[{ value: 'all', label: 'All account types' }, ...ACCOUNT_TYPES]} />
+                options={[{ value: 'all', label: 'Eval and funded' }, ...ACCOUNT_TYPES]} />
               <Select value={filters.trade_source} onChange={(e) => set({ trade_source: e.target.value })}
                 options={[{ value: 'all', label: 'All sources' }, ...reference.values('source').map((v) => ({ value: v, label: v }))]} />
               <Select value={filters.outcome} onChange={(e) => set({ outcome: e.target.value })}

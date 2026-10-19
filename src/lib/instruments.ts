@@ -37,7 +37,6 @@ export const GRADES = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C', 'F']
 export const ACCOUNT_TYPES = [
   { value: 'funded', label: 'Funded' },
   { value: 'eval', label: 'Eval' },
-  { value: 'paper', label: 'Paper Trading' },
 ]
 export const accountTypeLabel = (value: string | null | undefined) =>
   ACCOUNT_TYPES.find((a) => a.value === value)?.label ?? value ?? ''

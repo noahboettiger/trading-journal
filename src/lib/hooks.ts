@@ -6,7 +6,6 @@ import type { AppSettings, Lookups, Playbook, Tag } from './types'
 const DEFAULT_SETTINGS: AppSettings = {
   risk_cap_funded: 200,
   risk_cap_eval: 400,
-  risk_cap_paper: 400,
   account_type_default: 'funded',
 }
 
@@ -83,9 +82,7 @@ export function useReference() {
         ? settings.risk_cap_eval
         : accountType === 'funded'
           ? settings.risk_cap_funded
-          : accountType === 'paper'
-            ? settings.risk_cap_paper
-            : null,
+          : null,
     [settings],
   )
 

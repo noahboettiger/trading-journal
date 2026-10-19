@@ -69,7 +69,6 @@ export interface Tag { id: number; name: string; kind: string }
 export interface AppSettings {
   risk_cap_funded: number
   risk_cap_eval: number
-  risk_cap_paper: number
   account_type_default: string
 }
 

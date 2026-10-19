@@ -187,7 +187,6 @@ function RiskCapEditor({ reference }: { reference: ReturnType<typeof useReferenc
       await api.settings.save({
         risk_cap_funded: Number(value('risk_cap_funded')),
         risk_cap_eval: Number(value('risk_cap_eval')),
-        risk_cap_paper: Number(value('risk_cap_paper')),
         account_type_default: value('account_type_default'),
       })
       await reference.reload()
@@ -212,7 +211,7 @@ function RiskCapEditor({ reference }: { reference: ReturnType<typeof useReferenc
       />
       <div className="space-y-4 p-5">
         <ErrorNote error={error} />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Funded cap ($)" hint="Your standing risk per trade">
             <Input
               type="number"
@@ -227,14 +226,6 @@ function RiskCapEditor({ reference }: { reference: ReturnType<typeof useReferenc
               step="any"
               value={value('risk_cap_eval')}
               onChange={(e) => setDraft({ ...draft, risk_cap_eval: e.target.value })}
-            />
-          </Field>
-          <Field label="Paper cap ($)" hint="Practice at the size you are practising for">
-            <Input
-              type="number"
-              step="any"
-              value={value('risk_cap_paper')}
-              onChange={(e) => setDraft({ ...draft, risk_cap_paper: e.target.value })}
             />
           </Field>
           <Field label="New trades default to" hint="Whichever phase you are mostly in">

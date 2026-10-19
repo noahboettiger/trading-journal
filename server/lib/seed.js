@@ -43,7 +43,7 @@ const LOOKUPS = {
   ],
   style: ['Day Trade', 'Swing Trade', 'Cash-Secured Put', 'Scalp', 'Position'],
   session: ['Asia', 'London', 'NY AM', 'NY PM', 'Overnight'],
-  source: ['Prop', 'Personal', 'Eval', 'Live'],
+  source: ['Prop', 'Personal', 'Eval', 'Paper Trading', 'Live'],
   emotion: ['Calm', 'Focused', 'Confident', 'Anxious', 'Impatient', 'Frustrated', 'FOMO', 'Tired', 'Revenge'],
   timeframe: ['1m', '2m', '3m', '5m', '15m', '30m', '1h', '4h', 'Daily', 'Weekly'],
 }
