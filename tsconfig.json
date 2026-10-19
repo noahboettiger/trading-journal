@@ -12,8 +12,7 @@
     "resolveJsonModule": true,
     "allowJs": true,
     "isolatedModules": true,
-    "baseUrl": ".",
-    "paths": { "@/*": ["src/*"], "@shared/*": ["shared/*"] }
+    "paths": { "@/*": ["./src/*"], "@shared/*": ["./shared/*"] }
   },
   "include": ["src", "shared"]
 }

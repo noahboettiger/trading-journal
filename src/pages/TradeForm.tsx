@@ -7,7 +7,7 @@ import { useAsync, useReference } from '@/lib/hooks'
 import { money, rMultiple, pct, todayISO, pnlClass } from '@/lib/format'
 import {
   pointValueFor, GRADES, ASSET_CLASSES, ACCOUNT_TYPES, DIRECTIONS, OPTION_SIDES, OPTION_TYPES, STATUSES,
-  CLOSE_METHODS, optionTypeLabel,
+  CLOSE_METHODS, optionTypeLabel, accountTypeLabel,
 } from '@/lib/instruments'
 import type { RuleCheck, Trade, TradeImage } from '@/lib/types'
 import { PageHeader } from '@/components/Layout'
@@ -626,8 +626,8 @@ export default function TradeForm() {
                   {riskCap !== null && (
                     <p className={`text-xs ${overCap ? 'font-medium text-loss' : 'text-ink-faint'}`}>
                       {overCap
-                        ? `Risk of ${money(riskPreview)} is over the ${money(riskCap, { cents: false })} cap for a${form.account_type === 'eval' ? 'n eval' : ' funded account'}.`
-                        : `The risk rule on this trade reads ${money(riskCap, { cents: false })}, the cap for a${form.account_type === 'eval' ? 'n eval' : ' funded account'}.`}
+                        ? `Risk of ${money(riskPreview)} is over the ${money(riskCap, { cents: false })} cap for ${accountTypeLabel(form.account_type)}.`
+                        : `The risk rule on this trade reads ${money(riskCap, { cents: false })}, the cap for ${accountTypeLabel(form.account_type)}.`}
                     </p>
                   )}
                 </div>

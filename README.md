@@ -450,11 +450,14 @@ bigger while one is running and drops back once the account is funded. Set
 
 | Account type | Cap the rule grades against | Share of a 50K account's $2,000 drawdown |
 | --- | --- | --- |
-| Eval | $400 | 20% |
 | Funded | $200 | 10% |
+| Eval | $400 | 20% |
+| Paper Trading | $400 | practice at eval size |
 
-Both figures live in Settings under **Risk caps**, along with which phase a new
-trade starts on, so moving them again is two fields and no code.
+All three figures live in Settings under **Risk caps**, along with which phase a
+new trade starts on, so moving them again is a field each and no code. Paper
+trading gets a cap of its own rather than going ungraded, because practising at
+a size you would never really take is not practice.
 
 The rule text stores a `{risk_cap}` token rather than a figure, and each trade
 stores the cap it was actually held to. So raising a cap changes what new trades

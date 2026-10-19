@@ -11,10 +11,12 @@ export const SETTING_DEFAULTS = {
   // 10% and 20% of the $2,000 max drawdown on a 50K prop account.
   risk_cap_funded: 200,
   risk_cap_eval: 400,
+  // Paper is practice for an eval, so it starts at the eval size.
+  risk_cap_paper: 400,
   account_type_default: 'funded',
 }
 
-const NUMERIC = new Set(['risk_cap_funded', 'risk_cap_eval'])
+const NUMERIC = new Set(['risk_cap_funded', 'risk_cap_eval', 'risk_cap_paper'])
 
 export function readSettings() {
   const out = { ...SETTING_DEFAULTS }
@@ -58,5 +60,6 @@ export function riskCapFor(accountType) {
   const settings = readSettings()
   if (accountType === 'eval') return settings.risk_cap_eval
   if (accountType === 'funded') return settings.risk_cap_funded
+  if (accountType === 'paper') return settings.risk_cap_paper
   return null
 }
