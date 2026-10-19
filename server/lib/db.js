@@ -522,6 +522,26 @@ const MIGRATIONS = [
         .run(last + 1)
     }
   },
+
+  // 17 - Paper Trading to the top of the source list
+  //
+  // Renumbers the whole list rather than nudging one row, so the result is a
+  // clean 0..n run whatever gaps the list had picked up. Same reasoning as 16:
+  // nothing to do on a brand new database, where the seed already has it first.
+  (db) => {
+    const rows = db
+      .prepare("SELECT id, value FROM lookups WHERE kind = 'source' ORDER BY sort_order, id")
+      .all()
+    if (!rows.length) return
+    if (!rows.some((r) => r.value === 'Paper Trading')) return
+
+    const ordered = [
+      ...rows.filter((r) => r.value === 'Paper Trading'),
+      ...rows.filter((r) => r.value !== 'Paper Trading'),
+    ]
+    const setOrder = db.prepare('UPDATE lookups SET sort_order = ? WHERE id = ?')
+    ordered.forEach((row, i) => setOrder.run(i, row.id))
+  },
 ]
 
 function migrate() {
